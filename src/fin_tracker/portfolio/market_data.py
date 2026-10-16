@@ -87,5 +87,6 @@ def get_latest_quote(ticker_symbol: str) -> Quote | None:
         listing_currency=listing_currency,
         price=last_price,
         price_eur=last_price * get_eur_per_unit(listing_currency),
-        price_date=df_price_history.index[-1],
+        # yfinance returns exchange-local timestamps, keep the plain date
+        price_date=pd.Timestamp(df_price_history.index[-1].date()),
     )

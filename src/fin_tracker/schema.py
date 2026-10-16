@@ -11,13 +11,15 @@ UNIFIED_SCHEMA = {
     "account": pd.CategoricalDtype(ACCOUNTS),
     "sub_account": "string",
     "transaction_id": "string",
+    # Stable id across re-imports, used to store manual category overrides
+    "transaction_key": "string",
     # Dates
     "date": "datetime64[ns]",
     "value_date": "datetime64[ns]",
     "timestamp": "datetime64[ns, UTC]",
     # Classification and descriptions
     "transaction_type": "string",
-    "category": "string",
+    "bank_category": "string",
     "description": "string",
     "details": "string",
     # Counterparty
@@ -57,3 +59,22 @@ def conform_to_schema(df_transactions: pd.DataFrame) -> pd.DataFrame:
         A dataframe with exactly the columns of ``UNIFIED_SCHEMA``.
     """
     return df_transactions.reindex(columns=list(UNIFIED_SCHEMA)).astype(UNIFIED_SCHEMA)
+
+
+def compute_net_cash_eur(df_transactions: pd.DataFrame) -> pd.Series:
+    """Return the real EUR cash impact of each row: amount plus fees and taxes.
+
+    Only valid for Trade Republic, whose ``amount`` excludes fees and taxes.
+    Revolut amounts already include them (see CLAUDE.md).
+
+    Args:
+        df_transactions: Transactions in the unified schema.
+
+    Returns:
+        Net EUR cash flow per row.
+    """
+    return (
+        df_transactions["amount_eur"]
+        + df_transactions["fee_eur"].fillna(0)
+        + df_transactions["tax_eur"].fillna(0)
+    )

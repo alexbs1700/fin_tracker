@@ -2,13 +2,18 @@
 
 import pandas as pd
 
-from fin_tracker.config import SUB_ACCOUNT_OWNERSHIP_SHARE
+from fin_tracker.config import (
+    DEFAULT_ASSET_BUCKET,
+    ISIN_TO_ASSET_BUCKET,
+    SUB_ACCOUNT_OWNERSHIP_SHARE,
+)
 from fin_tracker.portfolio.holdings import compute_fifo_positions
 from fin_tracker.portfolio.market_data import (
     get_eur_per_unit,
     get_latest_quote,
     resolve_ticker,
 )
+from fin_tracker.schema import compute_net_cash_eur
 
 
 def compute_cash_balances(df_transactions: pd.DataFrame) -> pd.DataFrame:
@@ -45,9 +50,7 @@ def compute_cash_balances(df_transactions: pd.DataFrame) -> pd.DataFrame:
                 "account": "trade_republic",
                 "sub_account": "cash",
                 "currency": "EUR",
-                "balance": float(
-                    df_tr["amount"].sum() + df_tr["fee"].sum() + df_tr["tax"].sum()
-                ),
+                "balance": float(compute_net_cash_eur(df_tr).sum()),
                 "last_movement_date": df_tr["date"].max(),
             }
         ]
@@ -76,7 +79,8 @@ def value_positions(df_positions: pd.DataFrame) -> pd.DataFrame:
         df_positions: Open positions from :func:`compute_fifo_positions`.
 
     Returns:
-        Positions with ticker, latest price, market value and unrealized gain.
+        Positions with ticker, asset bucket, latest price, market value and
+        unrealized gain.
     """
     list_rows_quotes = []
     for asset_isin in df_positions["asset_isin"]:
@@ -93,6 +97,11 @@ def value_positions(df_positions: pd.DataFrame) -> pd.DataFrame:
 
     df_valued_positions = df_positions.merge(
         pd.DataFrame(list_rows_quotes), on="asset_isin", how="left"
+    )
+    df_valued_positions["asset_bucket"] = (
+        df_valued_positions["asset_isin"]
+        .map(ISIN_TO_ASSET_BUCKET)
+        .fillna(DEFAULT_ASSET_BUCKET)
     )
     df_valued_positions["market_value_eur"] = (
         df_valued_positions["shares"] * df_valued_positions["last_price_eur"]
