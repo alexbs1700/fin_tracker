@@ -74,7 +74,7 @@ export function Segmented<T extends string>({
   label,
 }: {
   options: { key: T; label: string }[];
-  value: T;
+  value: T | null;
   onChange: (value: T) => void;
   label: string;
 }) {
@@ -99,7 +99,7 @@ export function RangeSelector({
   value,
   onChange,
 }: {
-  value: RangeKey;
+  value: RangeKey | null;
   onChange: (range: RangeKey) => void;
 }) {
   return <Segmented options={RANGE_OPTIONS} value={value} onChange={onChange} label="Periodo" />;

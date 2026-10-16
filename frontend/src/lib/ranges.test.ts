@@ -1,6 +1,13 @@
 import { describe, expect, it } from "vitest";
 
-import { firstDatePerMonth, rangeFrequency, rangeStartDate, rangeStartMonth, toIsoDate } from "./ranges";
+import {
+  firstDatePerMonth,
+  matchingRange,
+  rangeFrequency,
+  rangeStartDate,
+  rangeStartMonth,
+  toIsoDate,
+} from "./ranges";
 
 const TODAY = new Date(2026, 9, 15); // 15 Oct 2026, local time
 
@@ -35,5 +42,14 @@ describe("rangeStartMonth", () => {
   it("snaps to the first day of the month", () => {
     expect(rangeStartMonth("1A", TODAY)).toBe("2025-10-01");
     expect(rangeStartMonth("TODO", TODAY)).toBeUndefined();
+  });
+});
+
+describe("matchingRange", () => {
+  it("recognizes presets and custom periods", () => {
+    expect(matchingRange("2026-07-15", "", TODAY)).toBe("3M");
+    expect(matchingRange("", "", TODAY)).toBe("TODO");
+    expect(matchingRange("2026-07-15", "2026-08-01", TODAY)).toBeNull();
+    expect(matchingRange("2026-07-10", "", TODAY)).toBeNull();
   });
 });

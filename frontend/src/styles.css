@@ -187,3 +187,18 @@ td select { padding: 4px 6px; font-size: 12px; max-width: 170px; }
 .nav-actions { display: flex; gap: 8px; }
 .panel .card-header { flex-wrap: nowrap; align-items: flex-start; }
 .panel .card-header > div { flex: 1; min-width: 0; }
+
+/* Multi-select chips (flow types) ----------------------------------------- */
+.chip {
+  background: var(--surface-2); color: var(--text-secondary); border: 1px solid var(--border);
+  border-radius: 999px; padding: 5px 12px; font: inherit; font-size: 12px; font-weight: 600; cursor: pointer;
+}
+.chip:hover { color: var(--text-primary); border-color: var(--border-strong); }
+.chip.active { background: var(--text-primary); color: var(--bg); border-color: var(--text-primary); }
+
+/* Custom period ------------------------------------------------------------ */
+.date-field { display: inline-flex; align-items: center; gap: 6px; color: var(--text-secondary); font-size: 12px; }
+input[type="date"] {
+  background: var(--surface-2); color: var(--text-primary); border: 1px solid var(--border);
+  border-radius: 10px; padding: 6px 8px; font: inherit; font-size: 13px;
+}

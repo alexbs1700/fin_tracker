@@ -1,5 +1,6 @@
-// Gastos: filters, spending by category and month, editable transactions table
-// with internal transfer tracing
+// Movimientos: filter by period, account, flow types, category and text; the
+// headline, breakdown and chart summarize exactly the filtered movements.
+// Transactions table with editable categories and internal transfer tracing.
 
 import {
   type ColumnDef,
@@ -11,45 +12,57 @@ import { useMemo, useState } from "react";
 
 import {
   useCategories,
-  useSpendingSummary,
   useTransactionLegs,
   useTransactions,
+  useTransactionsSummary,
   useUpdateCategory,
 } from "../api/client";
 import type { FlowType, Transaction } from "../api/types";
 import { MonthlyBarChart, type SeriesSpec } from "../components/charts";
-import { Card, ErrorState, LoadingState, RangeSelector } from "../components/ui";
+import { Card, ErrorState, Legend, LoadingState, RangeSelector } from "../components/ui";
 import { formatDate, formatEur, formatSignedEur } from "../lib/format";
 import { ACCOUNT_LABELS, FLOW_TYPE_LABELS, labelWallet } from "../lib/labels";
-import { type RangeKey, rangeStartDate } from "../lib/ranges";
+import {
+  activeFlowSeries,
+  describeTotal,
+  shareOfAbsoluteTotal,
+  toggleFlowType,
+} from "../lib/movements";
+import { matchingRange, type RangeKey, rangeStartDate } from "../lib/ranges";
 
 const PAGE_SIZE = 50;
-const MONTHLY_SPENDING_SERIES: SeriesSpec[] = [
-  { key: "spent_eur", label: "Gasto", color: "var(--series-1)" },
-];
 
-export default function Spending() {
-  const [range, setRange] = useState<RangeKey>("6M");
+// Same entities and colors as the cash flow chart of the Resumen page
+const FLOW_SERIES: Record<"inflow_eur" | "outflow_eur", SeriesSpec> = {
+  inflow_eur: { key: "inflow_eur", label: "Entradas", color: "var(--series-3)" },
+  outflow_eur: { key: "outflow_eur", label: "Salidas", color: "var(--series-4)" },
+};
+
+export default function Movements() {
+  // The period is two dates; presets only fill them in
+  const [dateFrom, setDateFrom] = useState(rangeStartDate("6M") ?? "");
+  const [dateTo, setDateTo] = useState("");
   const [account, setAccount] = useState("");
-  const [flowType, setFlowType] = useState<FlowType | "">("expense");
+  const [flowTypes, setFlowTypes] = useState<FlowType[]>(["expense"]);
   const [category, setCategory] = useState("");
   const [searchText, setSearchText] = useState("");
   const [page, setPage] = useState(0);
   const [tracedKey, setTracedKey] = useState<string | null>(null);
 
-  const dateFrom = rangeStartDate(range);
-  const spendingByCategory = useSpendingSummary({ group_by: "category", date_from: dateFrom });
-  const spendingByMonth = useSpendingSummary({ group_by: "month", date_from: dateFrom });
-  const categories = useCategories();
-  const transactions = useTransactions({
-    date_from: dateFrom,
+  // One set of filters drives the table and every summary on the page
+  const filters = {
+    date_from: dateFrom || undefined,
+    date_to: dateTo || undefined,
     account: account || undefined,
-    flow_type: flowType || undefined,
+    flow_type: flowTypes,
     category: category || undefined,
     q: searchText || undefined,
-    limit: PAGE_SIZE,
-    offset: page * PAGE_SIZE,
-  });
+  };
+  const total = useTransactionsSummary({ ...filters, group_by: "total" });
+  const byCategory = useTransactionsSummary({ ...filters, group_by: "category" });
+  const byMonth = useTransactionsSummary({ ...filters, group_by: "month" });
+  const categories = useCategories();
+  const transactions = useTransactions({ ...filters, limit: PAGE_SIZE, offset: page * PAGE_SIZE });
 
   // Any filter change goes back to the first page
   const withPageReset =
@@ -59,32 +72,56 @@ export default function Spending() {
       setPage(0);
     };
 
-  const totalSpent = (spendingByCategory.data ?? []).reduce((sum, row) => sum + row.spent_eur, 0);
-  const maxCategorySpent = Math.max(...(spendingByCategory.data ?? []).map((row) => row.spent_eur), 1);
+  const selectPreset = (range: RangeKey) => {
+    setDateFrom(rangeStartDate(range) ?? "");
+    setDateTo("");
+    setPage(0);
+  };
+
+  const totalRow = total.data?.[0];
+  const headline = describeTotal(flowTypes, totalRow);
+  const monthlySeries = activeFlowSeries(totalRow).map((key) => FLOW_SERIES[key]);
+  const categoryRows = byCategory.data ?? [];
+  const maxCategoryNet = Math.max(...categoryRows.map((row) => Math.abs(row.net_eur)), 1);
 
   return (
     <>
-      <p className="page-title">Gasto en el periodo</p>
+      <p className="page-title">{headline.label}</p>
       <div className="hero-row">
-        <h1 className="hero-value">{formatEur(totalSpent)}</h1>
-        <span className="muted">sin traspasos internos ni inversión</span>
+        <h1 className="hero-value">
+          {headline.isSigned ? formatSignedEur(headline.value) : formatEur(headline.value)}
+        </h1>
+        {totalRow && (
+          <span className="muted">
+            Entradas {formatEur(totalRow.inflow_eur)} · Salidas {formatEur(totalRow.outflow_eur)} ·{" "}
+            {totalRow.transactions} movimientos
+          </span>
+        )}
       </div>
 
       <div className="filters">
-        <RangeSelector value={range} onChange={withPageReset(setRange)} />
+        <RangeSelector value={matchingRange(dateFrom, dateTo)} onChange={selectPreset} />
+        <label className="date-field">
+          Desde
+          <input
+            type="date"
+            value={dateFrom}
+            max={dateTo || undefined}
+            onChange={(event) => withPageReset(setDateFrom)(event.target.value)}
+          />
+        </label>
+        <label className="date-field">
+          Hasta
+          <input
+            type="date"
+            value={dateTo}
+            min={dateFrom || undefined}
+            onChange={(event) => withPageReset(setDateTo)(event.target.value)}
+          />
+        </label>
         <select aria-label="Cuenta" value={account} onChange={(event) => withPageReset(setAccount)(event.target.value)}>
           <option value="">Todas las cuentas</option>
           {Object.entries(ACCOUNT_LABELS).map(([key, label]) => (
-            <option key={key} value={key}>{label}</option>
-          ))}
-        </select>
-        <select
-          aria-label="Tipo de movimiento"
-          value={flowType}
-          onChange={(event) => withPageReset(setFlowType)(event.target.value as FlowType | "")}
-        >
-          <option value="">Todos los tipos</option>
-          {Object.entries(FLOW_TYPE_LABELS).map(([key, label]) => (
             <option key={key} value={key}>{label}</option>
           ))}
         </select>
@@ -102,14 +139,39 @@ export default function Spending() {
         />
       </div>
 
+      <div className="filters" role="group" aria-label="Tipos de movimiento">
+        <button
+          type="button"
+          className={`chip${flowTypes.length === 0 ? " active" : ""}`}
+          aria-pressed={flowTypes.length === 0}
+          onClick={() => withPageReset(setFlowTypes)([])}
+        >
+          Todos
+        </button>
+        {(Object.entries(FLOW_TYPE_LABELS) as [FlowType, string][]).map(([flowType, label]) => (
+          <button
+            key={flowType}
+            type="button"
+            className={`chip${flowTypes.includes(flowType) ? " active" : ""}`}
+            aria-pressed={flowTypes.includes(flowType)}
+            onClick={() => withPageReset(setFlowTypes)(toggleFlowType(flowTypes, flowType))}
+          >
+            {flowTypes.includes(flowType) ? "✓ " : ""}
+            {label}
+          </button>
+        ))}
+      </div>
+
       <div className="stack">
         <div className="grid grid-2">
-          <Card title="Por categoría" subtitle="Pulsa una categoría para filtrar la tabla">
-            {spendingByCategory.isLoading ? (
+          <Card title="Por categoría" subtitle="Neto de cada categoría · pulsa una para filtrar">
+            {byCategory.isLoading ? (
               <LoadingState />
+            ) : categoryRows.length === 0 ? (
+              <p className="muted">Sin movimientos con estos filtros.</p>
             ) : (
               <div className="bar-list">
-                {spendingByCategory.data?.map((row) => (
+                {categoryRows.map((row) => (
                   <div
                     key={row.category}
                     className="bar-row clickable"
@@ -117,19 +179,22 @@ export default function Spending() {
                     tabIndex={0}
                     onClick={() => withPageReset(setCategory)(row.category ?? "")}
                     onKeyDown={(event) => event.key === "Enter" && withPageReset(setCategory)(row.category ?? "")}
-                    title={`${row.transactions} movimientos`}
+                    title={`${row.transactions} movimientos · entradas ${formatEur(row.inflow_eur)} · salidas ${formatEur(row.outflow_eur)}`}
                   >
                     <div className="bar-row-head">
                       <span>{row.category}</span>
                       <span>
-                        {formatEur(row.spent_eur)}{" "}
-                        <span className="muted">· {Math.round((row.spent_eur / totalSpent) * 100)} %</span>
+                        {formatSignedEur(row.net_eur)}{" "}
+                        <span className="muted">· {Math.round(shareOfAbsoluteTotal(row, categoryRows) * 100)} %</span>
                       </span>
                     </div>
                     <div className="bar-track">
                       <div
                         className="bar-fill"
-                        style={{ width: `${Math.max(0, (row.spent_eur / maxCategorySpent) * 100)}%`, background: "var(--series-1)" }}
+                        style={{
+                          width: `${(Math.abs(row.net_eur) / maxCategoryNet) * 100}%`,
+                          background: row.net_eur >= 0 ? FLOW_SERIES.inflow_eur.color : FLOW_SERIES.outflow_eur.color,
+                        }}
                       />
                     </div>
                   </div>
@@ -138,10 +203,11 @@ export default function Spending() {
             )}
           </Card>
 
-          <Card title="Gasto mensual">
+          <Card title="Por mes" subtitle="Entradas y salidas de los movimientos filtrados">
+            {monthlySeries.length > 1 && <Legend items={monthlySeries} />}
             <MonthlyBarChart
-              data={(spendingByMonth.data ?? []) as unknown as Record<string, unknown>[]}
-              series={MONTHLY_SPENDING_SERIES}
+              data={(byMonth.data ?? []) as unknown as Record<string, unknown>[]}
+              series={monthlySeries}
             />
           </Card>
         </div>

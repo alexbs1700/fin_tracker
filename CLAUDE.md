@@ -62,12 +62,13 @@ tests/               pytest, synthetic data only
 - Never print or commit real IBANs, card numbers or names in tests/docs; use synthetic data.
 
 ## API
-- Endpoints live under `/api`: `net-worth` (+ `/history`, `/history/accounts`), `transactions` (filters, `/{key}` with transfer counterpart, `PATCH /{key}/category`), `categories`, `spending/summary`, `cash-flow/monthly`, `portfolio` (+ `/history`).
+- Endpoints live under `/api`: `net-worth` (+ `/history`, `/history/accounts`), `transactions` (filters, `/summary` with in/out/net per group under the same filters, `/{key}` with transfer counterpart, `PATCH /{key}/category`), `categories`, `cash-flow/monthly`, `portfolio` (+ `/history`).
 - Route handlers stay thin: aggregation logic goes in plain functions (testable without HTTP) and data comes from `FinanceDataStore`.
 - API tests use `tests/api/conftest.py` (`store`, `client`) over the synthetic extracts with faked yfinance.
 
 ## Frontend
 - React 19 + Vite + TypeScript in `frontend/`; Vite proxies `/api` to the API on :8000. Run the API and `npm --prefix frontend run dev`, open http://127.0.0.1:5173.
-- Layout: `src/api/` (types + TanStack Query hooks), `src/lib/` (pure helpers, each with a `*.test.ts`), `src/components/` (ui + Recharts wrappers), `src/pages/` (Resumen, Gastos, Cartera).
+- Layout: `src/api/` (types + TanStack Query hooks), `src/lib/` (pure helpers, each with a `*.test.ts`), `src/components/` (ui + Recharts wrappers), `src/pages/` (Resumen, Movimientos, Cartera).
 - Tests: `npm --prefix frontend test` (vitest) and `npm --prefix frontend run typecheck`. Keep logic in `src/lib` so it is unit-tested.
+- Movimientos: one set of filters (period, account, multi-select flow types, category, text) drives the table and every summary; inflows use `--series-3`, outflows `--series-4` (same as the Resumen cash flow).
 - Look: dark only, black surfaces, white text, minimal (Getquin-like). Tokens live in `src/styles.css`; series colors are the validated dark categorical palette (fixed order, never cycled). Gains/losses always carry sign + arrow, never color alone. Text in Spanish.

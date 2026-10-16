@@ -1,8 +1,11 @@
 """Tests for fin_tracker.api.routes.transactions."""
 
+import datetime
+
 import pytest
 
 from fin_tracker.api.routes.transactions import (
+    TransactionFilters,
     filter_transactions,
     select_transaction_columns,
 )
@@ -114,3 +117,39 @@ def test_categories_include_manual_ones(client, store_with_transfer):
         f"/api/transactions/{transaction_key}/category", json={"category": "Regalos"}
     )
     assert "Regalos" in client.get("/api/categories").json()["categories"]
+
+
+def test_transaction_filters_apply_every_filter(store_with_transfer):
+    filters = TransactionFilters(
+        date_from=datetime.date(2026, 1, 2), account=["revolut"], flow_type=["expense"]
+    )
+    df_filtered = filters.apply(store_with_transfer.df_transactions)
+    assert df_filtered["description"].tolist() == ["Teatro Real"]
+
+
+def test_summarize_transactions_follows_the_filters(client, store_with_transfer):
+    list_total = client.get(
+        "/api/transactions/summary",
+        params={"flow_type": ["expense", "internal_transfer"]},
+    ).json()
+    assert list_total == [
+        {
+            "month": None,
+            "category": None,
+            "merchant": None,
+            "flow_type": None,
+            "inflow_eur": 500.0,
+            "outflow_eur": 529.0,
+            "net_eur": -29.0,
+            "transactions": 4,
+        }
+    ]
+
+    list_by_category = client.get(
+        "/api/transactions/summary",
+        params={"group_by": "category", "account": "bbva", "flow_type": "expense"},
+    ).json()
+    assert [(row["category"], row["net_eur"]) for row in list_by_category] == [
+        ("Supermercado", -20.0)
+    ]
+    assert client.get("/api/transactions/summary?group_by=weekday").status_code == 422

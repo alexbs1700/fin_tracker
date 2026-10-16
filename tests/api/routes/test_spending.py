@@ -6,8 +6,8 @@ import pytest
 from fin_tracker.api.routes.spending import (
     add_month,
     get_merchant,
+    summarize_flows,
     summarize_monthly_cash_flow,
-    summarize_spending,
 )
 from fin_tracker.categorization.rules import FLOW_TYPES
 from tests.conftest import build_transactions
@@ -48,20 +48,37 @@ def test_get_merchant_uses_transaction_type_for_generic_descriptions(df_transact
     ]
 
 
-def test_summarize_spending_by_category_ignores_transfers_and_investing(
-    df_transactions,
-):
-    df_summary = summarize_spending(df_transactions, "category")
-    assert df_summary[["category", "spent_eur", "transactions"]].values.tolist() == [
-        ["Vivienda", 500.0, 1],
-        ["Supermercado", 80.0, 2],
+def test_summarize_flows_expenses_by_category(df_transactions):
+    df_expenses = df_transactions[df_transactions["flow_type"] == "expense"]
+    df_summary = summarize_flows(df_expenses, "category")
+    assert df_summary[
+        ["category", "outflow_eur", "net_eur", "transactions"]
+    ].values.tolist() == [
+        ["Vivienda", 500.0, -500.0, 1],
+        ["Supermercado", 80.0, -80.0, 2],
     ]
 
 
-def test_summarize_spending_by_month_and_limit(df_transactions):
-    df_by_month = summarize_spending(df_transactions, "month_category")
-    assert df_by_month["month"].tolist() == ["2026-01", "2026-01", "2026-02"]
-    assert len(summarize_spending(df_transactions, "merchant", limit=1)) == 1
+def test_summarize_flows_total_mixes_inflows_and_outflows(df_transactions):
+    df_selected = df_transactions[
+        df_transactions["flow_type"].isin(["income", "expense"])
+    ]
+    assert summarize_flows(df_selected, "total").iloc[0].to_dict() == {
+        "inflow_eur": 2000.0,
+        "outflow_eur": 580.0,
+        "net_eur": 1420.0,
+        "transactions": 4,
+    }
+
+
+def test_summarize_flows_sorts_months_and_limits(df_transactions):
+    df_by_month = summarize_flows(df_transactions, "month_category")
+    assert df_by_month["month"].tolist() == sorted(df_by_month["month"])
+    assert len(summarize_flows(df_transactions, "merchant", limit=1)) == 1
+    # Biggest absolute net first, whatever its sign
+    assert (
+        summarize_flows(df_transactions, "flow_type")["flow_type"].iloc[0] == "income"
+    )
 
 
 def test_summarize_monthly_cash_flow(df_transactions):
@@ -76,12 +93,8 @@ def test_summarize_monthly_cash_flow(df_transactions):
     assert pd.isna(df_monthly.loc["2026-02", "savings_rate"])
 
 
-def test_spending_endpoints(client):
-    list_by_category = client.get("/api/spending/summary").json()
+def test_monthly_cash_flow_endpoint(client):
     list_monthly = client.get(
         "/api/cash-flow/monthly", params={"date_from": "2026-01-01"}
     ).json()
-
-    assert all(row["spent_eur"] is not None for row in list_by_category)
     assert list_monthly[0]["month"] == "2026-01"
-    assert client.get("/api/spending/summary?group_by=weekday").status_code == 422

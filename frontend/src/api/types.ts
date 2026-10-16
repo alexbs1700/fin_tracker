@@ -67,11 +67,14 @@ export interface CategoryCatalog {
   flow_types: FlowType[];
 }
 
-export interface SpendingRow {
+export interface FlowSummaryRow {
   month: string | null;
   category: string | null;
   merchant: string | null;
-  spent_eur: number;
+  flow_type: FlowType | null;
+  inflow_eur: number;
+  outflow_eur: number;
+  net_eur: number;
   transactions: number;
 }
 

@@ -1,12 +1,13 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { StrictMode, useState } from "react";
 import { createRoot } from "react-dom/client";
-import { BrowserRouter, NavLink, Route, Routes } from "react-router-dom";
+import { BrowserRouter, Navigate, NavLink, Route, Routes } from "react-router-dom";
 
 import ExtractsPanel from "./components/ExtractsPanel";
+import Movements from "./pages/Movements";
 import Overview from "./pages/Overview";
 import Portfolio from "./pages/Portfolio";
-import Spending from "./pages/Spending";
+
 import "./styles.css";
 
 // Data only changes when new extracts are loaded, so avoid refetching on focus
@@ -34,7 +35,7 @@ function App() {
         <span className="brand">fin_tracker</span>
         <div className="nav-links">
           <NavLink to="/" end>Resumen</NavLink>
-          <NavLink to="/gastos">Gastos</NavLink>
+          <NavLink to="/movimientos">Movimientos</NavLink>
           <NavLink to="/cartera">Cartera</NavLink>
         </div>
         <span className="nav-spacer" />
@@ -48,7 +49,8 @@ function App() {
       {isExtractsPanelOpen && <ExtractsPanel onClose={() => setIsExtractsPanelOpen(false)} />}
       <Routes>
         <Route path="/" element={<Overview />} />
-        <Route path="/gastos" element={<Spending />} />
+        <Route path="/movimientos" element={<Movements />} />
+        <Route path="/gastos" element={<Navigate to="/movimientos" replace />} />
         <Route path="/cartera" element={<Portfolio />} />
       </Routes>
     </div>

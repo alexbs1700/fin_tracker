@@ -1,6 +1,7 @@
 """Transaction endpoints: filtering, detail with transfer counterpart, recategorizing."""
 
-from typing import Annotated
+from dataclasses import dataclass
+from typing import Annotated, Literal
 
 import pandas as pd
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -9,9 +10,11 @@ from fin_tracker.api.dependencies import DateFrom, DateTo, get_store, to_timesta
 from fin_tracker.api.models import (
     CategoryCatalog,
     CategoryUpdate,
+    FlowSummaryRow,
     Transaction,
     TransactionPage,
 )
+from fin_tracker.api.routes.spending import DICT_GROUP_COLUMNS, summarize_flows
 from fin_tracker.api.serialization import dataframe_to_records, filter_date_range
 from fin_tracker.api.store import FinanceDataStore
 from fin_tracker.categorization.rules import (
@@ -72,34 +75,63 @@ def filter_transactions(
     return df_transactions[is_kept.fillna(False)]
 
 
+@dataclass
+class TransactionFilters:
+    """Filters shared by the transaction list and its summary (query parameters)."""
+
+    date_from: DateFrom = None
+    date_to: DateTo = None
+    account: Annotated[list[str] | None, Query()] = None
+    category: Annotated[list[str] | None, Query()] = None
+    flow_type: Annotated[list[str] | None, Query()] = None
+    q: Annotated[str | None, Query(description="Text search")] = None
+
+    def apply(self, df_transactions: pd.DataFrame) -> pd.DataFrame:
+        """Return the transactions matching every filter, oldest first."""
+        return filter_transactions(
+            filter_date_range(
+                df_transactions,
+                to_timestamp(self.date_from),
+                to_timestamp(self.date_to),
+            ),
+            self.account,
+            self.category,
+            self.flow_type,
+            self.q,
+        )
+
+
+Filters = Annotated[TransactionFilters, Depends()]
+
+
 @router.get("/transactions", response_model=TransactionPage)
 def list_transactions(
     store: Store,
-    date_from: DateFrom = None,
-    date_to: DateTo = None,
-    account: Annotated[list[str] | None, Query()] = None,
-    category: Annotated[list[str] | None, Query()] = None,
-    flow_type: Annotated[list[str] | None, Query()] = None,
-    q: Annotated[str | None, Query(description="Text search")] = None,
+    filters: Filters,
     limit: Annotated[int, Query(ge=1, le=MAX_PAGE_SIZE)] = 100,
     offset: Annotated[int, Query(ge=0)] = 0,
 ) -> dict:
     """Filtered transactions, newest first."""
-    df_filtered = filter_transactions(
-        filter_date_range(
-            store.df_transactions, to_timestamp(date_from), to_timestamp(date_to)
-        ),
-        account,
-        category,
-        flow_type,
-        q,
-    ).iloc[::-1]
+    df_filtered = filters.apply(store.df_transactions).iloc[::-1]
     return {
         "total": len(df_filtered),
         "items": dataframe_to_records(
             select_transaction_columns(df_filtered.iloc[offset : offset + limit])
         ),
     }
+
+
+@router.get("/transactions/summary", response_model=list[FlowSummaryRow])
+def summarize_transactions(
+    store: Store,
+    filters: Filters,
+    group_by: Literal[tuple(DICT_GROUP_COLUMNS)] = "total",  # type: ignore[valid-type]
+    limit: Annotated[int | None, Query(ge=1)] = None,
+) -> list[dict]:
+    """Money in, out and net of the filtered transactions, in total or per group."""
+    return dataframe_to_records(
+        summarize_flows(filters.apply(store.df_transactions), group_by, limit)
+    )
 
 
 @router.get("/transactions/{transaction_key}", response_model=list[Transaction])

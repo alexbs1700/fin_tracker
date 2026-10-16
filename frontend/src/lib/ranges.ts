@@ -49,3 +49,14 @@ export function rangeStartMonth(range: RangeKey, today: Date = new Date()): stri
   const startDate = rangeStartDate(range, today);
   return startDate ? `${startDate.slice(0, 7)}-01` : undefined;
 }
+
+/** The preset that produces exactly this period, or null for a custom one. */
+export function matchingRange(
+  dateFrom: string,
+  dateTo: string,
+  today: Date = new Date(),
+): RangeKey | null {
+  if (dateTo !== "") return null;
+  const preset = RANGE_OPTIONS.find((option) => (rangeStartDate(option.key, today) ?? "") === dateFrom);
+  return preset?.key ?? null;
+}

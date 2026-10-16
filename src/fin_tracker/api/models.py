@@ -108,13 +108,16 @@ class CategoryCatalog(BaseModel):
     flow_types: list[str]
 
 
-class SpendingRow(BaseModel):
-    """Spending aggregated by month, category or merchant."""
+class FlowSummaryRow(BaseModel):
+    """Money in, out and net of the filtered transactions, per group."""
 
     month: str | None = None
     category: str | None = None
     merchant: str | None = None
-    spent_eur: float
+    flow_type: str | None = None
+    inflow_eur: float
+    outflow_eur: float
+    net_eur: float
     transactions: int
 
 

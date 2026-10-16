@@ -1,17 +1,17 @@
-"""Spending and monthly cash flow endpoints.
+"""Flow aggregation (money in / out per group) and the monthly cash flow endpoint.
 
 Only ``expense`` rows count as spending and only ``income`` /
 ``investment_income`` as income, so internal transfers and investing never
 inflate either side.
 """
 
-from typing import Annotated, Literal
+from typing import Annotated
 
 import pandas as pd
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends
 
 from fin_tracker.api.dependencies import DateFrom, DateTo, get_store, to_timestamp
-from fin_tracker.api.models import MonthlyCashFlow, SpendingRow
+from fin_tracker.api.models import MonthlyCashFlow
 from fin_tracker.api.serialization import dataframe_to_records, filter_date_range
 from fin_tracker.api.store import FinanceDataStore
 from fin_tracker.schema import compute_net_cash_eur
@@ -23,10 +23,12 @@ INCOME_FLOW_TYPES = ["income", "investment_income"]
 # BBVA puts the payee of transfers and Bizums in transaction_type, not description
 GENERIC_DESCRIPTIONS = ["Transferencia realizada", "Transferencia recibida", "Bizum"]
 DICT_GROUP_COLUMNS = {
+    "total": [],
     "category": ["category"],
     "month": ["month"],
     "month_category": ["month", "category"],
     "merchant": ["merchant"],
+    "flow_type": ["flow_type"],
 }
 
 
@@ -51,35 +53,60 @@ def get_merchant(df_transactions: pd.DataFrame) -> pd.Series:
     )
 
 
-def summarize_spending(
+def summarize_flows(
     df_transactions: pd.DataFrame, group_by: str, limit: int | None = None
 ) -> pd.DataFrame:
-    """Spending (positive EUR) per group, biggest first.
+    """Money in, money out and net per group, for any selection of transactions.
+
+    Works for spending (expenses only), income, or any mix of flow types: the
+    caller filters the transactions, this only aggregates them.
 
     Args:
-        df_transactions: Categorized transactions.
+        df_transactions: Categorized transactions, already filtered.
         group_by: Key of ``DICT_GROUP_COLUMNS``.
         limit: Maximum number of rows.
 
     Returns:
-        Rows with the group columns, ``spent_eur`` and ``transactions``.
+        Rows with the group columns, ``inflow_eur`` and ``outflow_eur`` (both
+        positive), signed ``net_eur`` and ``transactions``. Months are sorted
+        chronologically, everything else by absolute net, biggest first.
     """
-    df_expenses = add_month(
-        df_transactions[df_transactions["flow_type"] == "expense"]
-    ).assign(merchant=get_merchant)
     list_group_columns = DICT_GROUP_COLUMNS[group_by]
-    df_summary = (
-        df_expenses.groupby(list_group_columns, as_index=False)
-        .agg(spent_eur=("amount_eur", "sum"), transactions=("amount_eur", "size"))
-        .assign(spent_eur=lambda df: -df["spent_eur"])
+    df_flows = add_month(df_transactions).assign(
+        merchant=get_merchant,
+        flow_type=df_transactions["flow_type"].astype("string"),
+        inflow_eur=df_transactions["amount_eur"].clip(lower=0),
+        outflow_eur=-df_transactions["amount_eur"].clip(upper=0),
+        net_eur=df_transactions["amount_eur"],
     )
-    # Months stay chronological, everything else sorts by spending
-    if group_by.startswith("month"):
-        df_summary = df_summary.sort_values(
-            ["month", "spent_eur"], ascending=[True, False]
+    dict_aggregations = {
+        "inflow_eur": ("inflow_eur", "sum"),
+        "outflow_eur": ("outflow_eur", "sum"),
+        "net_eur": ("net_eur", "sum"),
+        "transactions": ("net_eur", "size"),
+    }
+    if list_group_columns:
+        df_summary = df_flows.groupby(list_group_columns, as_index=False).agg(
+            **dict_aggregations
         )
     else:
-        df_summary = df_summary.sort_values("spent_eur", ascending=False)
+        df_summary = pd.DataFrame(
+            [
+                {
+                    "inflow_eur": df_flows["inflow_eur"].sum(),
+                    "outflow_eur": df_flows["outflow_eur"].sum(),
+                    "net_eur": df_flows["net_eur"].sum(),
+                    "transactions": len(df_flows),
+                }
+            ]
+        )
+
+    if group_by.startswith("month"):
+        df_summary = df_summary.sort_values("month", kind="stable")
+    elif list_group_columns:
+        df_summary = df_summary.sort_values(
+            "net_eur", key=lambda series: series.abs(), ascending=False
+        )
     return df_summary.head(limit) if limit else df_summary
 
 
@@ -118,21 +145,6 @@ def summarize_monthly_cash_flow(df_transactions: pd.DataFrame) -> pd.DataFrame:
         df_monthly["savings_eur"] / df_monthly["income_eur"]
     ).where(df_monthly["income_eur"] > 0)
     return df_monthly
-
-
-@router.get("/spending/summary", response_model=list[SpendingRow])
-def get_spending_summary(
-    store: Store,
-    group_by: Literal["category", "month", "month_category", "merchant"] = "category",
-    date_from: DateFrom = None,
-    date_to: DateTo = None,
-    limit: Annotated[int | None, Query(ge=1)] = None,
-) -> list[dict]:
-    """Spending aggregated by category, month, month and category, or merchant."""
-    df_transactions = filter_date_range(
-        store.df_transactions, to_timestamp(date_from), to_timestamp(date_to)
-    )
-    return dataframe_to_records(summarize_spending(df_transactions, group_by, limit))
 
 
 @router.get("/cash-flow/monthly", response_model=list[MonthlyCashFlow])

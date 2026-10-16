@@ -8,6 +8,7 @@ import type {
   ExtractReplaceResult,
   ExtractReport,
   ExtractStatus,
+  FlowSummaryRow,
   FlowType,
   LiquidityPoint,
   MonthlyCashFlow,
@@ -15,7 +16,6 @@ import type {
   NetWorthSummary,
   PortfolioPoint,
   PortfolioSummary,
-  SpendingRow,
   Transaction,
   TransactionPage,
 } from "./types";
@@ -88,11 +88,12 @@ export const useCategories = () =>
     queryFn: () => requestJson<CategoryCatalog>("/api/categories"),
   });
 
-export const useSpendingSummary = (params: QueryParams) =>
+export const useTransactionsSummary = (params: QueryParams) =>
   useQuery({
-    queryKey: ["spending-summary", params],
+    queryKey: ["transactions-summary", params],
     queryFn: () =>
-      requestJson<SpendingRow[]>(`/api/spending/summary${buildQueryString(params)}`),
+      requestJson<FlowSummaryRow[]>(`/api/transactions/summary${buildQueryString(params)}`),
+    placeholderData: (previousData) => previousData,
   });
 
 export const useMonthlyCashFlow = (params: QueryParams) =>
@@ -135,7 +136,7 @@ export function useUpdateCategory() {
     onSuccess: () => {
       for (const queryKey of [
         "transactions",
-        "spending-summary",
+        "transactions-summary",
         "cash-flow",
         "categories",
         "transaction",
