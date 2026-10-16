@@ -7,6 +7,7 @@ import ExtractsPanel from "./components/ExtractsPanel";
 import Movements from "./pages/Movements";
 import Overview from "./pages/Overview";
 import Portfolio from "./pages/Portfolio";
+import Projections from "./pages/Projections";
 
 import "./styles.css";
 
@@ -37,6 +38,7 @@ function App() {
           <NavLink to="/" end>Resumen</NavLink>
           <NavLink to="/movimientos">Movimientos</NavLink>
           <NavLink to="/cartera">Cartera</NavLink>
+          <NavLink to="/proyecciones">Proyecciones</NavLink>
         </div>
         <span className="nav-spacer" />
         <div className="nav-actions">
@@ -52,6 +54,7 @@ function App() {
         <Route path="/movimientos" element={<Movements />} />
         <Route path="/gastos" element={<Navigate to="/movimientos" replace />} />
         <Route path="/cartera" element={<Portfolio />} />
+        <Route path="/proyecciones" element={<Projections />} />
       </Routes>
     </div>
   );

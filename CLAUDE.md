@@ -18,6 +18,10 @@ src/fin_tracker/
   categorization/    rules.py (YAML rule engine), transfers.py (leg pairing),
                      overrides.py (manual corrections), pipeline.py
   history/           daily cash, portfolio and net worth series
+  projections/       baseline.py (scenario defaults from my data), payroll.py (gross
+                     salary calendar → monthly net + June IRPF refund), simulation.py
+                     (monthly projection + Monte Carlo percentiles)
+  taxes/spain.py     Social Security, IRPF withholding, Madrid IRPF liability (2026 values in config)
   storage/           price_cache.py (yfinance closes/FX cached as CSV)
   api/               FastAPI: store.py (cached dataframes), routes/ (one module per
                      resource), models.py (pydantic), serialization.py
@@ -62,13 +66,22 @@ tests/               pytest, synthetic data only
 - Never print or commit real IBANs, card numbers or names in tests/docs; use synthetic data.
 
 ## API
-- Endpoints live under `/api`: `net-worth` (+ `/history`, `/history/accounts`), `transactions` (filters, `/summary` with in/out/net per group under the same filters, `/{key}` with transfer counterpart, `PATCH /{key}/category`), `categories`, `cash-flow/monthly`, `portfolio` (+ `/history`).
+- Endpoints live under `/api`: `net-worth` (+ `/history`, `/history/accounts`), `transactions` (filters, `/summary` with in/out/net per group under the same filters, `/{key}` with transfer counterpart, `PATCH /{key}/category`), `categories`, `cash-flow/monthly`, `portfolio` (+ `/history`), `projections/baseline`, `POST projections/simulate`.
 - Route handlers stay thin: aggregation logic goes in plain functions (testable without HTTP) and data comes from `FinanceDataStore`.
 - API tests use `tests/api/conftest.py` (`store`, `client`) over the synthetic extracts with faked yfinance.
 
 ## Frontend
 - React 19 + Vite + TypeScript in `frontend/`; Vite proxies `/api` to the API on :8000. Run the API and `npm --prefix frontend run dev`, open http://127.0.0.1:5173.
-- Layout: `src/api/` (types + TanStack Query hooks), `src/lib/` (pure helpers, each with a `*.test.ts`), `src/components/` (ui + Recharts wrappers), `src/pages/` (Resumen, Movimientos, Cartera).
+- Layout: `src/api/` (types + TanStack Query hooks), `src/lib/` (pure helpers, each with a `*.test.ts`), `src/components/` (ui + Recharts wrappers), `src/pages/` (Resumen, Movimientos, Cartera, Proyecciones).
 - Tests: `npm --prefix frontend test` (vitest) and `npm --prefix frontend run typecheck`. Keep logic in `src/lib` so it is unit-tested.
 - Movimientos: one set of filters (period, account, multi-select flow types, category, text) drives the table and every summary; inflows use `--series-3`, outflows `--series-4` (same as the Resumen cash flow).
 - Look: dark only, black surfaces, white text, minimal (Getquin-like). Tokens live in `src/styles.css`; series colors are the validated dark categorical palette (fixed order, never cycled). Gains/losses always carry sign + arrow, never color alone. Text in Spanish.
+
+## Projections
+- Monthly loop: cash earns `cash_return`, investments `investment_return`; net salary, IRPF refund, other income, expenses and the contribution land at month end. Expenses/other income follow inflation and the contribution `investment_growth`, once a year. Rates are annual, nominal, as fractions.
+- Salary: a calendar of gross steps (fixed + bonus, from a month), 12 or 14 pays (extras in July and December, bonus in `bonus_month`), `salary_growth` after the last step. Payslips: Social Security 6.5 % on salary + prorated extras (none on the extra pay itself), withholding with the national scale (or a fixed override); the real tax uses state + Madrid scales and settles every June. Matches my real payslip within ~1 %.
+- IRPF refunds are their own category ("Devolución IRPF") and are excluded from "other income" so they are not counted twice.
+- Defaults (`/api/projections/baseline`): averages of the last 12 complete months (extra pays spread over the year), cash yield = TR share of cash × TR rate, return/volatility weighted by asset bucket using `ASSET_BUCKET_EXPECTED_RETURN` / `ASSET_BUCKET_VOLATILITY` in config.
+- Monte Carlo: lognormal monthly returns whose mean matches the expected return, fixed seed; the UI shows p10–p90 of the active scenario.
+- Tax parameters are 2026 values kept fixed in the future (no bracket deflation). Assumes indefinite contract, under 65, no children, Madrid.
+- Not modelled yet: taxes on gains, one-off events (house, car), withdrawals. Scenarios are stored in the browser (localStorage).

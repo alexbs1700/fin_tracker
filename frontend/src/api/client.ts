@@ -16,6 +16,8 @@ import type {
   NetWorthSummary,
   PortfolioPoint,
   PortfolioSummary,
+  ScenarioParameters,
+  ScenarioResult,
   Transaction,
   TransactionPage,
 } from "./types";
@@ -187,3 +189,25 @@ export function useReplaceExtract() {
     },
   });
 }
+
+export const useProjectionBaseline = () =>
+  useQuery({
+    queryKey: ["projection-baseline"],
+    queryFn: () => requestJson<ScenarioParameters>("/api/projections/baseline"),
+  });
+
+/** Simulate every scenario; it is fast, so it simply reruns on every edit. */
+export const useSimulation = (
+  scenarios: { name: string; parameters: ScenarioParameters }[],
+  simulations = 500,
+) =>
+  useQuery({
+    queryKey: ["simulation", scenarios, simulations],
+    queryFn: () =>
+      requestJson<ScenarioResult[]>("/api/projections/simulate", {
+        method: "POST",
+        body: JSON.stringify({ scenarios, simulations }),
+      }),
+    enabled: scenarios.length > 0,
+    placeholderData: (previousData) => previousData,
+  });

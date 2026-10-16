@@ -8,6 +8,7 @@ from fin_tracker.api.routes import (
     extracts,
     net_worth,
     portfolio,
+    projections,
     spending,
     transactions,
 )
@@ -36,7 +37,14 @@ def create_app(store: FinanceDataStore | None = None) -> FastAPI:
         allow_methods=["*"],
         allow_headers=["*"],
     )
-    for router_module in (net_worth, transactions, spending, portfolio, extracts):
+    for router_module in (
+        net_worth,
+        transactions,
+        spending,
+        portfolio,
+        extracts,
+        projections,
+    ):
         app.include_router(router_module.router)
 
     @app.get("/api/health", tags=["meta"])

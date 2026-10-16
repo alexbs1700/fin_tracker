@@ -7,6 +7,7 @@ import {
   Bar,
   BarChart,
   CartesianGrid,
+  ComposedChart,
   Line,
   LineChart,
   ResponsiveContainer,
@@ -86,26 +87,30 @@ export function StackedAreaChart({
   data,
   series,
   height = 300,
+  xKey = "date",
+  formatLabel = formatDate,
 }: {
   data: Record<string, unknown>[];
   series: SeriesSpec[];
   height?: number;
+  xKey?: string;
+  formatLabel?: (label: string) => string;
 }) {
   return (
     <ResponsiveContainer width="100%" height={height}>
       <AreaChart data={data} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
         {GRID}
         <XAxis
-          dataKey="date"
+          dataKey={xKey}
           {...AXIS_PROPS}
-          ticks={firstDatePerMonth(data.map((point) => String(point.date)))}
+          ticks={firstDatePerMonth(data.map((point) => String(point[xKey])))}
           tickFormatter={formatMonthTick}
           minTickGap={40}
         />
         <YAxis {...AXIS_PROPS} tickFormatter={formatEurCompact} width={70} />
         <Tooltip
           cursor={CURSOR_LINE}
-          content={<ChartTooltip series={series} formatLabel={formatDate} showTotal />}
+          content={<ChartTooltip series={series} formatLabel={formatLabel} showTotal />}
         />
         {series.map((spec) => (
           <Area
@@ -202,6 +207,104 @@ export function MonthlyBarChart({
           />
         ))}
       </BarChart>
+    </ResponsiveContainer>
+  );
+}
+
+/** Yearly ticks ("YYYY-01") so long projections stay readable. */
+function januaryTicks(months: string[]): string[] {
+  return months.filter((month, index) => index === 0 || month.endsWith("-01"));
+}
+
+function ProjectionTooltip({
+  active,
+  payload,
+  label,
+  series,
+  activeKey,
+}: {
+  active?: boolean;
+  payload?: { dataKey?: string | number; value?: number | [number, number] }[];
+  label?: string;
+  series: SeriesSpec[];
+  activeKey: string;
+}) {
+  if (!active || !payload?.length || label === undefined) return null;
+  const valueByKey = new Map(payload.map((entry) => [String(entry.dataKey), entry.value]));
+  const band = valueByKey.get("band") as [number, number] | undefined;
+  return (
+    <div className="chart-tooltip">
+      <div className="chart-tooltip-title">{formatMonthTick(label)}</div>
+      {series.map((spec) => (
+        <div key={spec.key} className="chart-tooltip-row">
+          <span className="chart-tooltip-name">
+            <span className="legend-swatch" style={{ background: spec.color }} />
+            {spec.label}
+          </span>
+          <span className="chart-tooltip-value">{formatEur(valueByKey.get(spec.key) as number | undefined)}</span>
+        </div>
+      ))}
+      {band && (
+        <div className="chart-tooltip-row" style={{ borderTop: "1px solid var(--border)", paddingTop: 4, marginTop: 6 }}>
+          <span className="chart-tooltip-name">{activeKey}: 80 % de los casos</span>
+          <span className="chart-tooltip-value">
+            {formatEurCompact(band[0])} – {formatEurCompact(band[1])}
+          </span>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** Scenario lines on one EUR axis, with the active scenario's p10–p90 band behind them. */
+export function ProjectionChart({
+  data,
+  series,
+  activeKey,
+  activeColor,
+  height = 340,
+}: {
+  data: Record<string, unknown>[];
+  series: SeriesSpec[];
+  activeKey: string;
+  activeColor: string;
+  height?: number;
+}) {
+  return (
+    <ResponsiveContainer width="100%" height={height}>
+      <ComposedChart data={data} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
+        {GRID}
+        <XAxis
+          dataKey="month"
+          {...AXIS_PROPS}
+          ticks={januaryTicks(data.map((row) => String(row.month)))}
+          tickFormatter={(month: string) => month.slice(0, 4)}
+          minTickGap={24}
+        />
+        <YAxis {...AXIS_PROPS} tickFormatter={formatEurCompact} width={70} />
+        <Tooltip cursor={CURSOR_LINE} content={<ProjectionTooltip series={series} activeKey={activeKey} />} />
+        <Area
+          dataKey="band"
+          stroke="none"
+          fill={activeColor}
+          fillOpacity={0.14}
+          isAnimationActive={false}
+          activeDot={false}
+        />
+        {series.map((spec) => (
+          <Line
+            key={spec.key}
+            type="monotone"
+            dataKey={spec.key}
+            stroke={spec.color}
+            strokeWidth={spec.key === activeKey ? 2.5 : 1.5}
+            strokeOpacity={spec.key === activeKey ? 1 : 0.7}
+            dot={false}
+            activeDot={{ r: 4, stroke: "var(--surface-1)", strokeWidth: 2 }}
+            isAnimationActive={false}
+          />
+        ))}
+      </ComposedChart>
     </ResponsiveContainer>
   );
 }

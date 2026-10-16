@@ -110,6 +110,10 @@ rules:
     category: Intereses y dividendos
 
   # --- Income --------------------------------------------------------------------------
+  - name: tax_refund
+    match: {text: "aeat|agencia tributaria", sign: positive}
+    flow_type: income
+    category: Devolución IRPF
   - name: salary
     match: {text: "nomina|finiquito", sign: positive}
     flow_type: income

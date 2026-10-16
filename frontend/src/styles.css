@@ -202,3 +202,33 @@ input[type="date"] {
   background: var(--surface-2); color: var(--text-primary); border: 1px solid var(--border);
   border-radius: 10px; padding: 6px 8px; font: inherit; font-size: 13px;
 }
+
+/* Proyecciones -------------------------------------------------------------- */
+.projection-layout { display: grid; grid-template-columns: 320px 1fr; gap: var(--gap); align-items: start; }
+@media (max-width: 960px) { .projection-layout { grid-template-columns: 1fr; } }
+.form-group { border: 0; border-top: 1px solid var(--border); margin: 0 0 4px; padding: 12px 0 4px; }
+.form-group legend { color: var(--text-muted); font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; padding-right: 8px; }
+.form-row { margin-bottom: 8px; }
+.form-field { display: flex; flex-direction: column; gap: 4px; margin-bottom: 10px; font-size: 12px; color: var(--text-secondary); }
+.form-field input[type="text"], .form-field input[type="number"] {
+  background: var(--surface-2); color: var(--text-primary); border: 1px solid var(--border);
+  border-radius: 10px; padding: 7px 10px; font: inherit; font-size: 13px; width: 100%;
+}
+.input-with-unit { position: relative; }
+.input-with-unit input { padding-right: 28px !important; }
+.input-with-unit .unit { position: absolute; right: 10px; top: 50%; transform: translateY(-50%); color: var(--text-muted); font-size: 12px; }
+.link-button { background: none; border: 0; padding: 0; color: var(--text-muted); font: inherit; font-size: 11px; text-align: left; cursor: pointer; text-decoration: underline; }
+.link-button:hover { color: var(--text-primary); }
+.chip:disabled { opacity: 0.4; cursor: not-allowed; }
+
+/* Salary calendar ----------------------------------------------------------- */
+.form-label { display: block; font-size: 12px; color: var(--text-secondary); margin: 4px 0 6px; }
+.salary-steps { display: flex; flex-direction: column; gap: 6px; margin-bottom: 6px; }
+.salary-step { display: grid; grid-template-columns: 1.25fr 1fr 0.9fr 20px; gap: 6px; align-items: center; }
+.salary-step-header span { font-size: 11px; color: var(--text-muted); }
+.salary-step input, .form-field select {
+  background: var(--surface-2); color: var(--text-primary); border: 1px solid var(--border);
+  border-radius: 8px; padding: 6px 7px; font: inherit; font-size: 12px; width: 100%; min-width: 0;
+}
+.checkbox-field { flex-direction: row; align-items: center; gap: 8px; }
+.link-button:disabled { opacity: 0.3; cursor: not-allowed; }

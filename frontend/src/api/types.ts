@@ -175,3 +175,82 @@ export interface ExtractReplaceResult {
   report: ExtractReport;
   backup_file: string | null;
 }
+
+export interface SalaryStep {
+  start_month: string;
+  gross_salary_eur: number;
+  gross_bonus_eur: number;
+}
+
+export interface ScenarioParameters {
+  horizon_years: number;
+  start_cash_eur: number;
+  start_investments_eur: number;
+  salary_schedule: SalaryStep[];
+  salary_growth: number;
+  payments_per_year: 12 | 14;
+  bonus_month: number;
+  retention_rate_override: number | null;
+  monthly_other_income_eur: number;
+  monthly_expenses_eur: number;
+  inflation: number;
+  monthly_investment_eur: number;
+  investment_growth: number;
+  cash_return: number;
+  investment_return: number;
+  investment_volatility: number;
+}
+
+export interface ProjectionPoint {
+  month: string;
+  cash_eur: number;
+  investments_eur: number;
+  total_eur: number;
+  total_real_eur: number;
+  invested_principal_eur: number;
+  salary_eur: number;
+  tax_refund_eur: number;
+  other_income_eur: number;
+  expenses_eur: number;
+  contribution_eur: number;
+}
+
+export interface PercentilePoint {
+  month: string;
+  p10_eur: number;
+  p50_eur: number;
+  p90_eur: number;
+}
+
+export interface ProjectionSummary {
+  final_cash_eur: number;
+  final_investments_eur: number;
+  final_total_eur: number;
+  final_total_real_eur: number;
+  start_total_eur: number;
+  total_contributions_eur: number;
+  investment_gains_eur: number;
+  first_negative_cash_month: string | null;
+}
+
+export interface PayrollYear {
+  year: number;
+  gross_eur: number;
+  social_security_eur: number;
+  retention_eur: number;
+  net_eur: number;
+  tax_liability_eur: number;
+  refund_eur: number;
+  retention_rate: number;
+  regular_month_net_eur: number;
+  extra_pay_net_eur: number;
+  bonus_net_eur: number;
+}
+
+export interface ScenarioResult {
+  name: string;
+  summary: ProjectionSummary;
+  payroll_years: PayrollYear[];
+  points: ProjectionPoint[];
+  percentiles: PercentilePoint[];
+}
