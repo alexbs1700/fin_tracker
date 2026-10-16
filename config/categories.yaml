@@ -1,0 +1,178 @@
+# Categorization rules, evaluated top to bottom: the first matching rule wins.
+#
+# match keys (all optional, every given key must match):
+#   account / sub_account / bank_category / transaction_type: list of exact values
+#   text:   regex searched in "description | transaction_type | details | counterparty"
+#   fields: {column: regex} searched in one column only
+#   sign:   negative | positive
+# Text is matched lowercase and without accents. Placeholders: {owner_name} (from .env).
+#
+# flow_type:
+#   internal_transfer  money moving between my own accounts / wallets
+#   investment         buying or selling assets (cash <-> investments, not spending)
+#   investment_income  dividends and interest
+#   income / expense   real money in / out of my finances
+#   excluded           movements inside the joint account (not my money)
+# pair_transfer: true  the row is a transfer leg to match with its counterpart
+# counterpart_account: only match legs in this account (disambiguates equal amounts)
+#
+# Rows matching no rule: negative -> expense "Otros gastos", positive -> income "Otros ingresos".
+
+rules:
+  # --- Joint account: not mine, but contributions to it are my spending ---------------
+  - name: joint_contribution_received
+    match: {sub_account: ["Cuenta Conjunta (EUR)"], text: "transferencia de {owner_name}"}
+    flow_type: excluded
+    category: Cuenta conjunta
+    pair_transfer: true
+  - name: joint_account_movements
+    match: {sub_account: ["Cuenta Conjunta (EUR)"]}
+    flow_type: excluded
+    category: Cuenta conjunta
+  - name: joint_contribution_sent
+    match: {account: [revolut], text: "^transferencia a .*&"}
+    flow_type: expense
+    category: Cuenta conjunta
+    pair_transfer: true
+
+  # --- Internal transfers between my accounts and wallets ------------------------------
+  - name: revolut_pockets
+    match: {account: [revolut], text: "pocket|round-up"}
+    flow_type: internal_transfer
+    category: Traspaso interno
+    pair_transfer: true
+  - name: revolut_currency_exchange
+    match: {account: [revolut], text: "^conversion a "}
+    flow_type: internal_transfer
+    category: Traspaso interno
+    pair_transfer: true
+  - name: revolut_top_ups
+    match:
+      account: [revolut]
+      fields: {description: "^recarga de \\*|^recarga con open banking|^pago de {owner_name}$|^transferencia (?:de|a) {owner_name}$"}
+    flow_type: internal_transfer
+    category: Traspaso interno
+    pair_transfer: true
+  - name: bbva_monthly_spending_transfer
+    match: {account: [bbva], text: "la pasta del mes"}
+    flow_type: internal_transfer
+    category: Traspaso interno
+    pair_transfer: true
+    counterpart_account: revolut
+  - name: bbva_monthly_investment_transfer
+    match: {account: [bbva], text: "monthly investment"}
+    flow_type: internal_transfer
+    category: Traspaso interno
+    pair_transfer: true
+    counterpart_account: trade_republic
+  - name: bbva_own_transfers
+    match: {account: [bbva], text: "{owner_name}"}
+    flow_type: internal_transfer
+    category: Traspaso interno
+    pair_transfer: true
+  - name: bbva_open_banking_pulls
+    match: {account: [bbva], fields: {transaction_type: "^oba[a-z0-9]{10,}"}}
+    flow_type: internal_transfer
+    category: Traspaso interno
+    pair_transfer: true
+  - name: bbva_card_top_ups
+    match: {account: [bbva], fields: {description: "^revolut\\*\\*|^trade republic$"}}
+    flow_type: internal_transfer
+    category: Traspaso interno
+    pair_transfer: true
+  - name: trade_republic_card_top_ups
+    match: {account: [trade_republic], transaction_type: [CUSTOMER_INPAYMENT]}
+    flow_type: internal_transfer
+    category: Traspaso interno
+    pair_transfer: true
+  - name: trade_republic_own_transfers
+    match:
+      account: [trade_republic]
+      transaction_type: [TRANSFER_INBOUND, TRANSFER_OUTBOUND]
+      text: "{owner_name}"
+    flow_type: internal_transfer
+    category: Traspaso interno
+    pair_transfer: true
+  - name: trade_republic_card_to_revolut
+    match: {account: [trade_republic], transaction_type: [CARD_TRANSACTION], text: "^revolut\\*\\*"}
+    flow_type: internal_transfer
+    category: Traspaso interno
+    pair_transfer: true
+
+  # --- Investments ---------------------------------------------------------------------
+  - name: trades
+    match: {account: [trade_republic], transaction_type: [BUY, SELL]}
+    flow_type: investment
+    category: Inversión
+  - name: dividends_and_interest
+    match: {account: [trade_republic], transaction_type: [DIVIDEND, INTEREST_PAYMENT]}
+    flow_type: investment_income
+    category: Intereses y dividendos
+
+  # --- Income --------------------------------------------------------------------------
+  - name: tax_refund
+    match: {text: "aeat|agencia tributaria", sign: positive}
+    flow_type: income
+    category: Devolución IRPF
+  - name: salary
+    match: {text: "nomina|finiquito", sign: positive}
+    flow_type: income
+    category: Nómina
+  - name: bizum_received
+    match: {text: "bizum|recibido:", sign: positive}
+    flow_type: income
+    category: Bizum recibido
+
+  # --- Expenses (no sign: merchant refunds reduce the category's spending) -------------
+  - name: rent
+    match: {text: "alquiler"}
+    flow_type: expense
+    category: Vivienda
+  - name: foreign_currency_wallets
+    match: {sub_account: ["Cuenta personal (HUF)", "Cuenta personal (TRY)", "Cuenta personal (INR)"]}
+    flow_type: expense
+    category: Viajes
+  - name: cash_withdrawals
+    match: {text: "retirada de efectivo|ret\\. efectivo|cajero"}
+    flow_type: expense
+    category: Efectivo
+  - name: subscriptions
+    match: {text: "tarifa del plan|google play|^apple|claude|adobe|spotify|netflix|hbo|disney|icloud|apple\\.com|chatgpt|openai|prime video"}
+    flow_type: expense
+    category: Suscripciones
+  - name: bank_fees
+    match: {text: "comision|revpoints"}
+    flow_type: expense
+    category: Comisiones
+  - name: supermarket
+    match: {text: "opencor|vending|alimentac|mega ahorro|minymas|guppy|mercadona|\\bdia\\b|carrefour|lidl|alcampo|aldi|eroski|ahorramas|hipercor|supermerc|despiece|fruteria|carniceria|panaderia|bakery"}
+    flow_type: expense
+    category: Supermercado
+  - name: travel
+    match: {text: "12go|booking|airbnb|hotel|hostel|wizz|ryanair|vueling|iberia|easyjet|kiwi\\.com|intermundial"}
+    flow_type: expense
+    category: Viajes
+  - name: transport
+    match: {text: "aparcamiento|tpark|movilidad|freeway|serviareas|renfe|autopista|aucalsa|peaje|petrom|consorcio regional de transportes|\\bemt\\b|metro|cabify|\\bbolt\\b|blablacar|onemove|\\bbp\\b|repsol|cepsa|galp|parking|norauto|belbim|budapestgo|taxi|\\balsa\\b|uber(?! eats)"}
+    flow_type: expense
+    category: Transporte
+  - name: restaurants
+    match: {text: "montaditos|five guys|heladeria|\\bpub\\b|terraza|granier|tortilla|restaurante|\\bbar\\b|cafe|burger|hamburgues|kebab|pizza|sushi|ramen|taco|uber eats|just eat|glovo|brunch|sidreria|bistro|cerveceria|mcdonald|starbucks|goiko|tasca|lounge"}
+    flow_type: expense
+    category: Restaurantes
+  - name: health_and_sport
+    match: {text: "farmacia|clinica|dentist|fisio|wellhub|gimnasio|\\bgym\\b|triatlon|ecosport|bikila|deportes|climbing|miyagi|culture bike|biciados"}
+    flow_type: expense
+    category: Salud y deporte
+  - name: leisure
+    match: {text: "teatro|\\bcine\\b|eventim|ingresse|concierto|museo|warner|ticketmaster|steam|playstation"}
+    flow_type: expense
+    category: Ocio
+  - name: shopping
+    match: {text: "casa del libro|espasa calpe|el corte ingles|zara|amazon|decathlon|ikea|primark|mango|bershka|uniqlo|carhartt|siroko|forum sport|fnac|media ?markt|caleido"}
+    flow_type: expense
+    category: Compras
+  - name: bizum_sent
+    match: {text: "bizum payment to|enviado:", sign: negative}
+    flow_type: expense
+    category: Bizum enviado

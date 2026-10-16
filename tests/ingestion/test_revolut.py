@@ -114,3 +114,10 @@ def test_load_revolut_equals_read_then_normalize(path_raw_data):
     pd.testing.assert_frame_equal(
         load_revolut(path_file), normalize_revolut(read_revolut_raw(path_file))
     )
+
+
+def test_read_revolut_raw_raises_without_wallet_tables(tmp_path):
+    path_file = tmp_path / "not_revolut.csv"
+    path_file.write_text("a,b\n1,2\n", encoding="utf-8")
+    with pytest.raises(ValueError, match="no wallet tables"):
+        read_revolut_raw(path_file)

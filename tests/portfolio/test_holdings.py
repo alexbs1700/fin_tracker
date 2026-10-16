@@ -1,9 +1,18 @@
 """Tests for fin_tracker.portfolio.holdings."""
 
+from collections import deque
+
 import pandas as pd
 import pytest
 
-from fin_tracker.portfolio.holdings import compute_fifo_positions, get_trades
+from fin_tracker.portfolio.holdings import (
+    Lot,
+    compute_fifo_positions,
+    compute_holdings_timeline,
+    get_trades,
+    replay_asset_trades,
+    sell_from_lots,
+)
 from fin_tracker.schema import conform_to_schema
 
 
@@ -103,3 +112,48 @@ def test_assets_are_tracked_independently(df_transactions):
     assert df_positions.set_index("asset_isin")["shares"].to_dict() == pytest.approx(
         {"IE00TEST0001": 5, "IE00OTHER001": 2}
     )
+
+
+def test_sell_from_lots_consumes_and_removes_oldest_lots():
+    deque_lots = deque(
+        [
+            Lot(
+                shares=2,
+                cost_per_share_eur=10.0,
+                purchase_date=pd.Timestamp("2026-01-01"),
+            ),
+            Lot(
+                shares=3,
+                cost_per_share_eur=20.0,
+                purchase_date=pd.Timestamp("2026-02-01"),
+            ),
+        ]
+    )
+    assert sell_from_lots(deque_lots, 3) == pytest.approx(2 * 10.0 + 1 * 20.0)
+    assert len(deque_lots) == 1
+    assert deque_lots[0].shares == pytest.approx(2)
+
+
+def test_replay_asset_trades_returns_lots_realized_and_timeline(df_transactions):
+    df_asset_trades = get_trades(df_transactions)
+    deque_lots, list_rows_realized, list_rows_timeline = replay_asset_trades(
+        df_asset_trades
+    )
+    assert sum(lot.shares for lot in deque_lots) == pytest.approx(5)
+    assert len(list_rows_realized) == 1
+    assert [row["shares"] for row in list_rows_timeline] == pytest.approx([10, 20, 5])
+    assert list_rows_timeline[-1]["cost_basis_eur"] == pytest.approx(5 * 20.1)
+
+
+def test_compute_holdings_timeline_keeps_last_position_per_day(df_transactions):
+    df_same_day_buy = conform_to_schema(
+        pd.DataFrame([make_trade("2026-03-01T15:00:00", "BUY", 1, -30.0, 0.0)])
+    )
+    df_timeline = compute_holdings_timeline(
+        pd.concat([df_transactions, df_same_day_buy], ignore_index=True)
+    )
+    assert (
+        df_timeline["date"].tolist()
+        == pd.to_datetime(["2026-01-01", "2026-02-01", "2026-03-01"]).tolist()
+    )
+    assert df_timeline["shares"].tolist() == pytest.approx([10, 20, 6])

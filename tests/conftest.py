@@ -15,6 +15,8 @@ from fin_tracker.config import (
     FILE_NAME_TRADE_REPUBLIC,
 )
 from fin_tracker.portfolio import market_data
+from fin_tracker.schema import conform_to_schema
+from fin_tracker.storage import price_cache
 
 # ---------------------------------------------------------------------------
 # Synthetic raw extracts
@@ -155,30 +157,65 @@ FAKE_MARKET = {
 }
 
 
+# Fixed "today" of the synthetic market, used as end_date in history tests
+FAKE_TODAY = pd.Timestamp("2026-10-15")
+
+
 class FakeTicker:
-    """Minimal stand-in for ``yfinance.Ticker`` backed by ``FAKE_MARKET``."""
+    """Minimal stand-in for ``yfinance.Ticker`` backed by ``FAKE_MARKET``.
+
+    Prices are constant on every business day up to ``FAKE_TODAY``.
+    """
 
     def __init__(self, ticker_symbol: str):
         self.ticker = ticker_symbol
         _, currency = FAKE_MARKET.get(ticker_symbol, (None, None))
         self.fast_info = {"currency": currency}
 
-    def history(self, period: str) -> pd.DataFrame:
+    def history(
+        self, period: str | None = None, start: str | None = None, **kwargs
+    ) -> pd.DataFrame:
         if self.ticker not in FAKE_MARKET:
             return pd.DataFrame(columns=["Close"])
         price, _ = FAKE_MARKET[self.ticker]
-        return pd.DataFrame(
-            {"Close": [price * 0.9, price]},
-            index=pd.to_datetime(["2026-10-14", "2026-10-15"]),
-        )
+        index_days = pd.bdate_range(start or "2026-10-14", FAKE_TODAY, tz="UTC")
+        return pd.DataFrame({"Close": price}, index=index_days)
 
 
 @pytest.fixture
-def fake_yfinance(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Replace yfinance with ``FakeTicker`` and reset the price caches."""
+def fake_yfinance(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    """Replace yfinance with ``FakeTicker``, isolate the price cache, reset caches."""
     monkeypatch.setattr(market_data.yf, "Ticker", FakeTicker)
+    monkeypatch.setattr(price_cache, "PATH_PRICE_CACHE", tmp_path / "prices")
     market_data.get_eur_per_unit.cache_clear()
     market_data.get_latest_quote.cache_clear()
     yield
     market_data.get_eur_per_unit.cache_clear()
     market_data.get_latest_quote.cache_clear()
+
+
+# ---------------------------------------------------------------------------
+# Hand-built transactions for unit tests
+# ---------------------------------------------------------------------------
+
+# Synthetic owner name used for the {owner_name} rule placeholder
+TEST_OWNER_NAME = "Test Owner"
+
+
+def build_transactions(list_rows: list[dict]) -> pd.DataFrame:
+    """Build a unified-schema dataframe from partial rows.
+
+    Missing ``amount_eur`` / ``currency`` / ``transaction_key`` get sensible
+    defaults so tests only spell out what they check.
+    """
+    list_complete_rows = []
+    for index_row, dict_row in enumerate(list_rows):
+        dict_complete_row = {
+            "currency": "EUR",
+            "transaction_key": f"key-{index_row}",
+            "amount_eur": dict_row.get("amount"),
+            **dict_row,
+        }
+        dict_complete_row["date"] = pd.Timestamp(dict_complete_row["date"])
+        list_complete_rows.append(dict_complete_row)
+    return conform_to_schema(pd.DataFrame(list_complete_rows))

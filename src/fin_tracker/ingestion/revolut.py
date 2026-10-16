@@ -147,6 +147,9 @@ def read_revolut_raw(
 
     Returns:
         Raw movements of all wallets, with ``wallet`` and ``currency`` columns.
+
+    Raises:
+        ValueError: If the file has no wallet transaction table.
     """
     list_lines = path_file.read_text(encoding="utf-8").splitlines()
     list_marker_indices = [
@@ -154,6 +157,8 @@ def read_revolut_raw(
         for index_line, line in enumerate(list_lines)
         if get_first_cell(line) == WALLET_TABLE_MARKER
     ]
+    if not list_marker_indices:
+        raise ValueError(f"no wallet tables found (no '{WALLET_TABLE_MARKER}' line)")
     list_df_wallets = [
         read_wallet_table(list_lines, index_marker)
         for index_marker in list_marker_indices
@@ -184,7 +189,7 @@ def normalize_revolut(df_revolut_raw: pd.DataFrame) -> pd.DataFrame:
             "account": "revolut",
             "sub_account": df_revolut_raw["wallet"],
             "date": parse_spanish_date(df_revolut_raw["date"]),
-            "category": df_revolut_raw["category"],
+            "bank_category": df_revolut_raw["category"],
             "description": df_revolut_raw["description"],
             "amount": df_revolut_raw["amount"],
             "currency": df_revolut_raw["currency"],

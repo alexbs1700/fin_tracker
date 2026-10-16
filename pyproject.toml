@@ -8,16 +8,22 @@ authors = [
 ]
 requires-python = ">=3.12"
 dependencies = [
+    "fastapi>=0.143.2",
     "ipykernel>=7.4.0",
     "ipywidgets>=8.1.9",
     "numpy>=2.5.4",
     "openpyxl>=3.1.5",
     "pandas>=3.0.6",
+    "python-dotenv>=1.2.4",
+    "python-multipart>=0.0.32",
+    "pyyaml>=6.0.3",
+    "uvicorn[standard]>=0.54.0",
     "yfinance>=1.7.0",
 ]
 
 [project.scripts]
 fin-tracker = "fin_tracker:main"
+fin-tracker-api = "fin_tracker.api.app:run"
 
 [build-system]
 requires = ["uv_build>=0.8.22,<0.9.0"]
@@ -25,6 +31,7 @@ build-backend = "uv_build"
 
 [dependency-groups]
 dev = [
+    "httpx>=0.28.1",
     "pre-commit>=4.6.2",
     "pytest>=9.1.1",
     "ruff>=0.17.1",
@@ -61,3 +68,4 @@ docstring-code-format = true
 testpaths = ["tests"]
 addopts = "--import-mode=importlib"
 pythonpath = ["."]
+filterwarnings = ["ignore:Using `httpx` with `starlette.testclient`"]
