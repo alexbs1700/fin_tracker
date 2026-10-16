@@ -1,0 +1,63 @@
+[project]
+name = "fin-tracker"
+version = "0.1.0"
+description = "Personal finance tracker: unify bank extracts, value investments, plan and project"
+readme = "README.md"
+authors = [
+    { name = "alexbs17", email = "alexbs1700@gmail.com" }
+]
+requires-python = ">=3.12"
+dependencies = [
+    "ipykernel>=7.4.0",
+    "ipywidgets>=8.1.9",
+    "numpy>=2.5.4",
+    "openpyxl>=3.1.5",
+    "pandas>=3.0.6",
+    "yfinance>=1.7.0",
+]
+
+[project.scripts]
+fin-tracker = "fin_tracker:main"
+
+[build-system]
+requires = ["uv_build>=0.8.22,<0.9.0"]
+build-backend = "uv_build"
+
+[dependency-groups]
+dev = [
+    "pre-commit>=4.6.2",
+    "pytest>=9.1.1",
+    "ruff>=0.17.1",
+]
+
+[tool.ruff]
+line-length = 88
+src = ["src"]
+
+[tool.ruff.lint]
+select = [
+    "E", "W",  # pycodestyle
+    "F",       # pyflakes
+    "I",       # isort
+    "UP",      # pyupgrade
+    "B",       # bugbear
+    "SIM",     # simplify
+    "C4",      # comprehensions
+    "N",       # pep8-naming
+    "RUF",     # ruff-specific
+]
+ignore = ["E501"]  # line length is the formatter's job
+
+[tool.ruff.lint.per-file-ignores]
+"*.ipynb" = ["E402", "B018"]  # imports mid-notebook, bare expressions to display values
+
+[tool.ruff.lint.isort]
+known-first-party = ["fin_tracker", "tests"]
+
+[tool.ruff.format]
+docstring-code-format = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "--import-mode=importlib"
+pythonpath = ["."]
