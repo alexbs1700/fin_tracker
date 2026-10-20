@@ -33,7 +33,7 @@ tests/               pytest, synthetic data only
 
 ## Commands
 - `uv run fin-tracker`: net worth summary
-- `uv run fin-tracker-api`: API on http://127.0.0.1:8000 (docs at /docs). `POST /api/reload` after dropping new extracts in `data/raw`.
+- `uv run fin-tracker-api`: API on http://127.0.0.1:8000 (docs at /docs). It also serves the built app (`npm --prefix frontend run build` → `frontend/dist`) at `/`. `POST /api/reload` after dropping new extracts in `data/raw`.
 - New extracts are normally uploaded from the app ("Cargar extractos"): `POST /api/extracts/{bank}/validate` checks, `POST /api/extracts/{bank}` re-validates, backs up the old file to `data/raw/backups/` and replaces it.
 - `uv run pytest`
 - `uv run ruff format . && uv run ruff check --fix .`
@@ -80,8 +80,15 @@ tests/               pytest, synthetic data only
 ## Projections
 - Monthly loop: cash earns `cash_return`, investments `investment_return`; net salary, IRPF refund, other income, expenses and the contribution land at month end. Expenses/other income follow inflation and the contribution `investment_growth`, once a year. Rates are annual, nominal, as fractions.
 - Salary: a calendar of gross steps (fixed + bonus, from a month), 12 or 14 pays (extras in July and December, bonus in `bonus_month`), `salary_growth` after the last step. Payslips: Social Security 6.5 % on salary + prorated extras (none on the extra pay itself), withholding with the national scale (or a fixed override); the real tax uses state + Madrid scales and settles every June. Matches my real payslip within ~1 %.
+- Investing: `investment_mode` is `fixed` (monthly amount growing by `investment_growth`) or `salary_percent` (yearly `investment_plan` of the share of each net payslip invested, extras and bonus included; the last step carries on). The baseline proposes my observed share (invested ÷ net salary, last 12 months).
 - IRPF refunds are their own category ("Devolución IRPF") and are excluded from "other income" so they are not counted twice.
 - Defaults (`/api/projections/baseline`): averages of the last 12 complete months (extra pays spread over the year), cash yield = TR share of cash × TR rate, return/volatility weighted by asset bucket using `ASSET_BUCKET_EXPECTED_RETURN` / `ASSET_BUCKET_VOLATILITY` in config.
 - Monte Carlo: lognormal monthly returns whose mean matches the expected return, fixed seed; the UI shows p10–p90 of the active scenario.
 - Tax parameters are 2026 values kept fixed in the future (no bracket deflation). Assumes indefinite contract, under 65, no children, Madrid.
 - Not modelled yet: taxes on gains, one-off events (house, car), withdrawals. Scenarios are stored in the browser (localStorage).
+
+## iPhone access (installable web app)
+- The built frontend is a PWA (manifest, icons in `frontend/public/icons`, iOS meta tags): Safari → Share → Add to Home Screen. Below 700 px it switches to a bottom tab bar and safe-area padding.
+- Network exposure is opt-in: `FIN_TRACKER_HOST=0.0.0.0` in `.env` makes the API reachable on the WiFi. It refuses to start that way without `FIN_TRACKER_ACCESS_KEY` (≥ 12 chars).
+- `AccessKeyMiddleware`: every `/api` call from a non-loopback client needs the `X-Access-Key` header (`/api/health` stays public); the Mac itself never needs it. The frontend asks for the key once and keeps it in localStorage.
+- Traffic is plain HTTP on the home network; for use outside home, put Tailscale in front rather than opening ports.

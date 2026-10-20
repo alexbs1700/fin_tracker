@@ -5,7 +5,7 @@ import pytest
 
 from fin_tracker.api.models import ScenarioParametersModel
 from fin_tracker.api.routes.projections import get_start_month, to_scenario_parameters
-from fin_tracker.projections import SalaryStep
+from fin_tracker.projections import InvestmentPlanStep, SalaryStep
 
 
 def test_get_start_month():
@@ -18,8 +18,12 @@ def test_to_scenario_parameters_builds_salary_steps():
         ScenarioParametersModel(
             salary_schedule=[{"start_month": "2026-01", "gross_salary_eur": 30000}],
             retention_rate_override=0.15,
+            investment_mode="salary_percent",
+            investment_plan=[{"year": 2027, "salary_percent": 0.2}],
         )
     )
+    assert parameters.investment_plan == (InvestmentPlanStep(2027, 0.2),)
+    assert parameters.investment_mode == "salary_percent"
     assert parameters.salary_schedule == (SalaryStep("2026-01", 30000, 0.0),)
     assert parameters.retention_rate_override == 0.15
 
@@ -87,5 +91,35 @@ def test_simulate_without_monte_carlo_and_invalid_input(client):
     assert client.post("/api/projections/simulate", json=dict_body).status_code == 422
     assert (
         client.post("/api/projections/simulate", json={"scenarios": []}).status_code
+        == 422
+    )
+
+
+def test_simulate_invests_a_share_of_salary(client):
+    dict_parameters = {
+        "horizon_years": 1,
+        "salary_schedule": [{"start_month": "2027-01", "gross_salary_eur": 30000}],
+        "investment_mode": "salary_percent",
+        "investment_plan": [{"year": 2027, "salary_percent": 0.5}],
+    }
+    dict_result = client.post(
+        "/api/projections/simulate",
+        json={
+            "scenarios": [{"name": "A", "parameters": dict_parameters}],
+            "simulations": 0,
+            "start_month": "2027-01",
+        },
+    ).json()[0]
+    dict_first_month = dict_result["points"][0]
+    assert dict_first_month["contribution_eur"] == pytest.approx(
+        0.5 * dict_first_month["salary_eur"]
+    )
+
+    dict_parameters["investment_plan"] = [{"year": 2027, "salary_percent": 1.5}]
+    assert (
+        client.post(
+            "/api/projections/simulate",
+            json={"scenarios": [{"name": "A", "parameters": dict_parameters}]},
+        ).status_code
         == 422
     )

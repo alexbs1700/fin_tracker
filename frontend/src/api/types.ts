@@ -182,6 +182,13 @@ export interface SalaryStep {
   gross_bonus_eur: number;
 }
 
+export interface InvestmentPlanStep {
+  year: number;
+  salary_percent: number;
+}
+
+export type InvestmentMode = "fixed" | "salary_percent";
+
 export interface ScenarioParameters {
   horizon_years: number;
   start_cash_eur: number;
@@ -194,8 +201,10 @@ export interface ScenarioParameters {
   monthly_other_income_eur: number;
   monthly_expenses_eur: number;
   inflation: number;
+  investment_mode: InvestmentMode;
   monthly_investment_eur: number;
   investment_growth: number;
+  investment_plan: InvestmentPlanStep[];
   cash_return: number;
   investment_return: number;
   investment_volatility: number;

@@ -35,6 +35,12 @@ PATH_CATEGORY_RULES = PATH_PROJECT_ROOT / "config" / "categories.yaml"
 # Personal identifiers (my name) live in the gitignored .env, never in the repo
 load_dotenv(PATH_PROJECT_ROOT / ".env")
 OWNER_NAME = os.environ.get("OWNER_NAME", "")
+# Network exposure of the API. Loopback by default; any other host (e.g. 0.0.0.0
+# to reach it from the iPhone on the home WiFi) requires an access key.
+API_HOST = os.environ.get("FIN_TRACKER_HOST", "127.0.0.1")
+API_PORT = int(os.environ.get("FIN_TRACKER_PORT", "8000"))
+API_ACCESS_KEY = os.environ.get("FIN_TRACKER_ACCESS_KEY", "")
+PATH_FRONTEND_DIST = PATH_PROJECT_ROOT / "frontend" / "dist"
 
 # Raw extract file names, one per bank
 FILE_NAME_BBVA = "bbva_full_data.xlsx"

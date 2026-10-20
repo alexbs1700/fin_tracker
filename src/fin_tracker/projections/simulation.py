@@ -18,6 +18,36 @@ from fin_tracker.projections.payroll import SalaryStep, build_salary_income
 
 MONTHS_PER_YEAR = 12
 PERCENTILES = (10, 50, 90)
+INVESTMENT_MODES = ("fixed", "salary_percent")
+
+
+@dataclass(frozen=True)
+class InvestmentPlanStep:
+    """Share of the net salary invested from ``year`` on (until the next step)."""
+
+    year: int
+    salary_percent: float
+
+
+def get_invested_share(
+    year: int, investment_plan: tuple[InvestmentPlanStep, ...]
+) -> float:
+    """Share of net salary invested in ``year`` under a yearly plan.
+
+    Before the first step the first step applies; after the last one it stays.
+
+    Args:
+        year: Calendar year.
+        investment_plan: Plan steps, in any order.
+
+    Returns:
+        Share as a fraction, 0 without any step.
+    """
+    if not investment_plan:
+        return 0.0
+    list_steps = sorted(investment_plan, key=lambda step: step.year)
+    list_started = [step for step in list_steps if step.year <= year]
+    return (list_started[-1] if list_started else list_steps[0]).salary_percent
 
 
 @dataclass(frozen=True)
@@ -36,8 +66,12 @@ class ScenarioParameters:
         monthly_other_income_eur: Other recurring income per month.
         monthly_expenses_eur: Spending per month.
         inflation: Yearly growth of expenses, also used for "today's euros".
-        monthly_investment_eur: Contribution moved to investments every month.
-        investment_growth: Yearly growth of the monthly contribution.
+        investment_mode: ``fixed`` (a monthly amount) or ``salary_percent``
+            (a share of each month's net payslip).
+        monthly_investment_eur: Contribution of every month in ``fixed`` mode.
+        investment_growth: Yearly growth of the contribution in ``fixed`` mode.
+        investment_plan: ``salary_percent`` mode: share of net salary invested
+            from each year on, see ``InvestmentPlanStep``.
         cash_return: Yield on cash.
         investment_return: Expected return of the investments.
         investment_volatility: Yearly volatility of the investments (Monte Carlo).
@@ -54,8 +88,10 @@ class ScenarioParameters:
     monthly_other_income_eur: float = 0.0
     monthly_expenses_eur: float = 0.0
     inflation: float = 0.0
+    investment_mode: str = "fixed"
     monthly_investment_eur: float = 0.0
     investment_growth: float = 0.0
+    investment_plan: tuple["InvestmentPlanStep", ...] = field(default_factory=tuple)
     cash_return: float = 0.0
     investment_return: float = 0.0
     investment_volatility: float = 0.0
@@ -94,6 +130,20 @@ def build_monthly_flows(
         list_months,
     )
     series_year_index = pd.Series(np.arange(parameters.months) // MONTHS_PER_YEAR)
+    if parameters.investment_mode == "salary_percent":
+        # Invest a share of each payslip, so extra pays and bonus are invested too
+        series_invested_share = pd.Series(
+            [
+                get_invested_share(int(month[:4]), parameters.investment_plan)
+                for month in list_months
+            ]
+        )
+        series_contribution = df_income["salary_net_eur"] * series_invested_share
+    else:
+        series_contribution = (
+            parameters.monthly_investment_eur
+            * (1 + parameters.investment_growth) ** series_year_index
+        )
     df_flows = pd.DataFrame(
         {
             "salary_eur": df_income["salary_net_eur"],
@@ -102,8 +152,7 @@ def build_monthly_flows(
             * (1 + parameters.inflation) ** series_year_index,
             "expenses_eur": parameters.monthly_expenses_eur
             * (1 + parameters.inflation) ** series_year_index,
-            "contribution_eur": parameters.monthly_investment_eur
-            * (1 + parameters.investment_growth) ** series_year_index,
+            "contribution_eur": series_contribution,
         }
     )
     return df_flows, df_payroll_years

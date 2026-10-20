@@ -6,11 +6,13 @@ import { useEffect, useMemo, useState } from "react";
 import { useProjectionBaseline, useSimulation } from "../api/client";
 import type { ScenarioParameters, ScenarioResult } from "../api/types";
 import { ProjectionChart, StackedAreaChart, type SeriesSpec } from "../components/charts";
+import { InvestmentPlanEditor } from "../components/InvestmentPlanEditor";
 import { PayrollTable, SalaryEditor } from "../components/SalaryEditor";
 import { Card, ErrorState, Legend, LoadingState, Segmented } from "../components/ui";
 import { formatEur, formatMonthTick, formatPercent } from "../lib/format";
 import {
   buildChartRows,
+  contributionsByYear,
   createDefaultScenarios,
   duplicateScenario,
   fromInputValue,
@@ -177,7 +179,17 @@ export default function Projections() {
           {PARAMETER_GROUPS.map((group) => (
             <fieldset key={group.title} className="form-group">
               <legend>{group.title}</legend>
-              {group.fields.map((field) => (
+              {group.title === "Inversión" && (
+                <InvestmentPlanEditor
+                  scenario={activeScenario}
+                  currentShare={baseline.data?.investment_plan[0]?.salary_percent}
+                  firstYear={Number((results[0]?.points[0]?.month ?? String(new Date().getFullYear())).slice(0, 4))}
+                  onChange={replaceActive}
+                />
+              )}
+              {group.fields
+                .filter((field) => !(field.onlyInFixedMode && activeScenario.parameters.investment_mode !== "fixed"))
+                .map((field) => (
                 <ParameterInput
                   key={`${activeScenario.id}-${field.key}`}
                   field={field}
@@ -239,6 +251,7 @@ export default function Projections() {
           >
             <PayrollTable
               payrollYears={activeResult?.payroll_years ?? []}
+              contributionsByYear={contributionsByYear(activeResult?.points ?? [])}
               paymentsPerYear={activeScenario.parameters.payments_per_year}
             />
           </Card>
