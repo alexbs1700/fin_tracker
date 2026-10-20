@@ -6,9 +6,11 @@ import pytest
 
 from fin_tracker.projections.payroll import SalaryStep
 from fin_tracker.projections.simulation import (
+    InvestmentPlanStep,
     ScenarioParameters,
     build_month_labels,
     build_monthly_flows,
+    get_invested_share,
     simulate_paths,
     simulate_percentiles,
     simulate_scenario,
@@ -136,3 +138,45 @@ def test_summarize_projection_reports_gains_and_negative_cash():
     assert dict_summary["start_total_eur"] == 1100
     # 100 - 60 per month: negative in the second month
     assert dict_summary["first_negative_cash_month"] == "2026-12"
+
+
+PLAN = (InvestmentPlanStep(2028, 0.25), InvestmentPlanStep(2026, 0.10))
+
+
+@pytest.mark.parametrize(
+    ("year", "expected_share"),
+    [(2025, 0.10), (2026, 0.10), (2027, 0.10), (2028, 0.25), (2040, 0.25)],
+)
+def test_get_invested_share_follows_the_plan(year, expected_share):
+    assert get_invested_share(year, PLAN) == expected_share
+
+
+def test_get_invested_share_without_plan():
+    assert get_invested_share(2026, ()) == 0.0
+
+
+def test_build_monthly_flows_invests_a_share_of_each_payslip():
+    parameters = ScenarioParameters(
+        horizon_years=2,
+        salary_schedule=(SalaryStep("2026-01", 28000),),
+        payments_per_year=14,
+        investment_mode="salary_percent",
+        investment_plan=(
+            InvestmentPlanStep(2026, 0.10),
+            InvestmentPlanStep(2027, 0.20),
+        ),
+        # Ignored in salary_percent mode
+        monthly_investment_eur=999,
+    )
+    df_flows, _ = build_monthly_flows(parameters, START_MONTH)
+    # Nov 2026 at 10 %, Dec 2026 includes the extra pay, 2027 at 20 %
+    assert df_flows["contribution_eur"].iloc[0] == pytest.approx(
+        0.10 * df_flows["salary_eur"].iloc[0]
+    )
+    assert df_flows["contribution_eur"].iloc[1] == pytest.approx(
+        0.10 * df_flows["salary_eur"].iloc[1]
+    )
+    assert df_flows["contribution_eur"].iloc[1] > df_flows["contribution_eur"].iloc[0]
+    assert df_flows["contribution_eur"].iloc[2] == pytest.approx(
+        0.20 * df_flows["salary_eur"].iloc[2]
+    )

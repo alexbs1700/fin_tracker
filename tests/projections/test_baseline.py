@@ -11,6 +11,7 @@ from fin_tracker.config import (
 )
 from fin_tracker.projections.baseline import (
     compute_cash_return,
+    compute_invested_salary_share,
     compute_monthly_averages,
     compute_portfolio_assumptions,
     estimate_baseline,
@@ -129,6 +130,10 @@ def test_estimate_baseline_combines_everything(df_transactions):
     assert dict_baseline["start_investments_eur"] == 500.0
     assert dict_baseline["cash_return"] == 0.0
     assert dict_baseline["payments_per_year"] == 14
+    assert dict_baseline["investment_mode"] == "fixed"
+    assert dict_baseline["investment_plan"] == [
+        {"year": 2026, "salary_percent": round(101 / 3600, 3)}
+    ]
     assert dict_baseline["salary_schedule"][0]["start_month"] == "2026-06"
 
 
@@ -144,3 +149,11 @@ def test_estimate_current_salary_without_salary():
     df_empty = build_transactions([{"date": "2026-01-01", "amount": 1.0}])
     df_empty["category"] = pd.Series(["Otros"], dtype="string")
     assert estimate_current_salary(df_empty, TODAY) is None
+
+
+def test_compute_invested_salary_share(df_transactions):
+    df_recent = get_complete_months(df_transactions, TODAY)
+    # 101 EUR invested (fee included) out of 3.600 EUR of salary
+    assert compute_invested_salary_share(df_recent) == pytest.approx(101 / 3600)
+    df_no_salary = df_recent[df_recent["category"] != "Nómina"]
+    assert compute_invested_salary_share(df_no_salary) == 0.0

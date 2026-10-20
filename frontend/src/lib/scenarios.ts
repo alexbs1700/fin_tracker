@@ -1,7 +1,15 @@
 // Scenario editing for the Proyecciones page: defaults, form metadata,
 // persistence and chart-ready data. Pure functions, unit-tested.
 
-import type { PercentilePoint, SalaryStep, ScenarioParameters, ScenarioResult } from "../api/types";
+import type {
+  InvestmentMode,
+  InvestmentPlanStep,
+  PercentilePoint,
+  ProjectionPoint,
+  SalaryStep,
+  ScenarioParameters,
+  ScenarioResult,
+} from "../api/types";
 
 export interface Scenario {
   id: string;
@@ -28,6 +36,8 @@ export interface ParameterField {
   label: string;
   unit: "eur" | "percent";
   hint?: string;
+  // Shown only when the scenario invests a fixed amount
+  onlyInFixedMode?: boolean;
 }
 
 export const PARAMETER_GROUPS: { title: string; fields: ParameterField[] }[] = [
@@ -55,8 +65,8 @@ export const PARAMETER_GROUPS: { title: string; fields: ParameterField[] }[] = [
   {
     title: "Inversión",
     fields: [
-      { key: "monthly_investment_eur", label: "Aportación mensual", unit: "eur" },
-      { key: "investment_growth", label: "Aumento anual de la aportación", unit: "percent" },
+      { key: "monthly_investment_eur", label: "Aportación mensual", unit: "eur", onlyInFixedMode: true },
+      { key: "investment_growth", label: "Aumento anual de la aportación", unit: "percent", onlyInFixedMode: true },
       { key: "investment_return", label: "Rentabilidad esperada", unit: "percent" },
       { key: "investment_volatility", label: "Volatilidad", unit: "percent", hint: "Anchura de la banda de incertidumbre" },
     ],
@@ -149,7 +159,7 @@ export function loadScenarios(storage: Pick<Storage, "getItem"> | undefined): Sc
     const stored = storage?.getItem(STORAGE_KEY);
     if (!stored) return null;
     const scenarios = JSON.parse(stored) as Scenario[];
-    return Array.isArray(scenarios) && scenarios.length > 0 ? scenarios : null;
+    return Array.isArray(scenarios) && scenarios.length > 0 ? scenarios.map(withParameterDefaults) : null;
   } catch {
     return null;
   }
@@ -237,4 +247,62 @@ export function updateSetting<K extends "payments_per_year" | "bonus_month" | "r
   value: ScenarioParameters[K],
 ): Scenario {
   return { ...scenario, parameters: { ...scenario.parameters, [key]: value } };
+}
+
+/** Fill parameters added after a scenario was saved, so old scenarios keep working. */
+export function withParameterDefaults(scenario: Scenario): Scenario {
+  return {
+    ...scenario,
+    parameters: {
+      ...scenario.parameters,
+      investment_mode: scenario.parameters.investment_mode ?? "fixed",
+      investment_plan: scenario.parameters.investment_plan ?? [],
+    },
+  };
+}
+
+export function setInvestmentMode(scenario: Scenario, mode: InvestmentMode): Scenario {
+  return { ...scenario, parameters: { ...scenario.parameters, investment_mode: mode } };
+}
+
+/** Plan steps in year order. */
+export function sortInvestmentPlan(plan: InvestmentPlanStep[]): InvestmentPlanStep[] {
+  return [...plan].sort((stepA, stepB) => stepA.year - stepB.year);
+}
+
+/** New plan step the year after the last one (same share), or ``fallbackYear`` when empty. */
+export function addPlanStep(scenario: Scenario, fallbackYear: number, fallbackPercent: number): Scenario {
+  const plan = sortInvestmentPlan(scenario.parameters.investment_plan);
+  const lastStep = plan.at(-1);
+  const newStep: InvestmentPlanStep = lastStep
+    ? { year: lastStep.year + 1, salary_percent: lastStep.salary_percent }
+    : { year: fallbackYear, salary_percent: fallbackPercent };
+  return { ...scenario, parameters: { ...scenario.parameters, investment_plan: [...plan, newStep] } };
+}
+
+export function updatePlanStep(scenario: Scenario, index: number, patch: Partial<InvestmentPlanStep>): Scenario {
+  const plan = scenario.parameters.investment_plan.map((step, stepIndex) =>
+    stepIndex === index ? { ...step, ...patch } : step,
+  );
+  return { ...scenario, parameters: { ...scenario.parameters, investment_plan: plan } };
+}
+
+/** Remove a plan step; at least one stays. */
+export function removePlanStep(scenario: Scenario, index: number): Scenario {
+  if (scenario.parameters.investment_plan.length <= 1) return scenario;
+  const plan = scenario.parameters.investment_plan.filter((_, stepIndex) => stepIndex !== index);
+  return { ...scenario, parameters: { ...scenario.parameters, investment_plan: plan } };
+}
+
+/** Money invested and net salary per calendar year of a projection. */
+export function contributionsByYear(points: ProjectionPoint[]): Map<number, { investedEur: number; salaryEur: number }> {
+  const byYear = new Map<number, { investedEur: number; salaryEur: number }>();
+  for (const point of points) {
+    const year = Number(point.month.slice(0, 4));
+    const totals = byYear.get(year) ?? { investedEur: 0, salaryEur: 0 };
+    totals.investedEur += point.contribution_eur;
+    totals.salaryEur += point.salary_eur;
+    byYear.set(year, totals);
+  }
+  return byYear;
 }

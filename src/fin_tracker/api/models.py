@@ -232,6 +232,13 @@ class SalaryStepModel(BaseModel):
     gross_bonus_eur: float = Field(0.0, ge=0)
 
 
+class InvestmentPlanStepModel(BaseModel):
+    """Share of net salary invested from ``year`` on."""
+
+    year: int = Field(ge=2000, le=2100)
+    salary_percent: float = Field(ge=0, le=1)
+
+
 class ScenarioParametersModel(BaseModel):
     """Inputs of one projection scenario (annual nominal rates as fractions)."""
 
@@ -246,8 +253,12 @@ class ScenarioParametersModel(BaseModel):
     monthly_other_income_eur: float = Field(0.0, ge=0)
     monthly_expenses_eur: float = Field(0.0, ge=0)
     inflation: float = Field(0.0, ge=-0.1, le=0.5)
+    investment_mode: Literal["fixed", "salary_percent"] = "fixed"
     monthly_investment_eur: float = Field(0.0, ge=0)
     investment_growth: float = Field(0.0, ge=-0.5, le=0.5)
+    investment_plan: list[InvestmentPlanStepModel] = Field(
+        default_factory=list, max_length=60
+    )
     cash_return: float = Field(0.0, ge=-0.1, le=0.5)
     investment_return: float = Field(0.0, ge=-0.5, le=0.5)
     investment_volatility: float = Field(0.0, ge=0, le=1)

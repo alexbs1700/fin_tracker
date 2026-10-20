@@ -20,6 +20,14 @@ def store(path_raw_data, tmp_path, fake_yfinance) -> FinanceDataStore:
     )
 
 
+# Requests from the Mac itself: no access key needed
+LOOPBACK_CLIENT = ("127.0.0.1", 50000)
+TEST_ACCESS_KEY = "test-access-key-123"
+
+
 @pytest.fixture
 def client(store) -> TestClient:
-    return TestClient(create_app(store))
+    return TestClient(
+        create_app(store, access_key=TEST_ACCESS_KEY, path_frontend_dist=None),
+        client=LOOPBACK_CLIENT,
+    )

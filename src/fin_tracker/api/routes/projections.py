@@ -14,6 +14,7 @@ from fin_tracker.api.models import (
 from fin_tracker.api.serialization import dataframe_to_records
 from fin_tracker.api.store import FinanceDataStore
 from fin_tracker.projections import (
+    InvestmentPlanStep,
     SalaryStep,
     ScenarioParameters,
     estimate_baseline,
@@ -31,6 +32,9 @@ def to_scenario_parameters(model: ScenarioParametersModel) -> ScenarioParameters
     dict_parameters = model.model_dump()
     dict_parameters["salary_schedule"] = tuple(
         SalaryStep(**step) for step in dict_parameters["salary_schedule"]
+    )
+    dict_parameters["investment_plan"] = tuple(
+        InvestmentPlanStep(**step) for step in dict_parameters["investment_plan"]
     )
     return ScenarioParameters(**dict_parameters)
 

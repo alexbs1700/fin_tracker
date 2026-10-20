@@ -139,7 +139,15 @@ export function SalaryEditor({
 }
 
 /** Year by year: gross, payslips, withholding and the refund settled next June. */
-export function PayrollTable({ payrollYears, paymentsPerYear }: { payrollYears: PayrollYear[]; paymentsPerYear: number }) {
+export function PayrollTable({
+  payrollYears,
+  paymentsPerYear,
+  contributionsByYear,
+}: {
+  payrollYears: PayrollYear[];
+  paymentsPerYear: number;
+  contributionsByYear: Map<number, { investedEur: number; salaryEur: number }>;
+}) {
   if (payrollYears.length === 0) return <p className="muted">Sin salario en este escenario.</p>;
   return (
     <div className="table-wrap">
@@ -154,6 +162,7 @@ export function PayrollTable({ payrollYears, paymentsPerYear }: { payrollYears: 
             <th className="num">Retención</th>
             <th className="num">Neto del año</th>
             <th className="num">Renta (junio siguiente)</th>
+            <th className="num">Invertido</th>
           </tr>
         </thead>
         <tbody>
@@ -171,10 +180,26 @@ export function PayrollTable({ payrollYears, paymentsPerYear }: { payrollYears: 
                   {year.refund_eur >= 0 ? "▲ a devolver" : "▼ a pagar"} {formatEur(Math.abs(year.refund_eur))}
                 </span>
               </td>
+              <InvestedCell totals={contributionsByYear.get(year.year)} />
             </tr>
           ))}
         </tbody>
       </table>
     </div>
+  );
+}
+
+/** Money invested in a projected year and its share of that year's net salary. */
+function InvestedCell({ totals }: { totals: { investedEur: number; salaryEur: number } | undefined }) {
+  if (!totals) return <td className="num muted">—</td>;
+  return (
+    <td className="num">
+      {formatEur(totals.investedEur)}
+      {totals.salaryEur > 0 && (
+        <div className="muted" style={{ fontSize: 11 }}>
+          {formatPercent(totals.investedEur / totals.salaryEur)} del neto
+        </div>
+      )}
+    </td>
   );
 }

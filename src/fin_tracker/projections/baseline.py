@@ -128,6 +128,28 @@ def estimate_current_salary(
     }
 
 
+def compute_invested_salary_share(df_recent: pd.DataFrame) -> float:
+    """Share of the net salary that went to investments over the lookback months.
+
+    Args:
+        df_recent: Categorized transactions of the complete lookback months.
+
+    Returns:
+        Invested amount divided by net salary received, 0 without salary.
+    """
+    series_flow_type = df_recent["flow_type"].astype("string")
+    salary_eur = float(
+        df_recent.loc[
+            (series_flow_type == "income") & (df_recent["category"] == SALARY_CATEGORY),
+            "amount_eur",
+        ].sum()
+    )
+    invested_eur = -float(
+        compute_net_cash_eur(df_recent[series_flow_type == "investment"]).sum()
+    )
+    return max(0.0, invested_eur / salary_eur) if salary_eur > 0 else 0.0
+
+
 def compute_cash_return(df_cash_balances: pd.DataFrame) -> float:
     """Yield of my cash as a whole: only Trade Republic cash earns interest.
 
@@ -202,10 +224,11 @@ def estimate_baseline(
     today = today or pd.Timestamp.today().normalize()
     df_cash_balances = dict_net_worth["df_cash_balances"]
     df_positions = dict_net_worth["df_positions"]
+    df_recent = get_complete_months(df_transactions, today)
     return {
         "start_cash_eur": float(df_cash_balances["my_balance_eur"].sum()),
         "start_investments_eur": float(df_positions["market_value_eur"].sum()),
-        **compute_monthly_averages(get_complete_months(df_transactions, today)),
+        **compute_monthly_averages(df_recent),
         "salary_schedule": [
             step for step in [estimate_current_salary(df_transactions, today)] if step
         ],
@@ -215,6 +238,13 @@ def estimate_baseline(
         "retention_rate_override": None,
         "inflation": DEFAULT_INFLATION,
         "investment_growth": 0.0,
+        "investment_mode": "fixed",
+        "investment_plan": [
+            {
+                "year": today.year,
+                "salary_percent": round(compute_invested_salary_share(df_recent), 3),
+            }
+        ],
         "cash_return": compute_cash_return(df_cash_balances),
         **compute_portfolio_assumptions(df_positions),
     }

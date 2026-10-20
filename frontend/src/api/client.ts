@@ -2,6 +2,8 @@
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
+import { AuthRequiredError, buildAuthHeaders, getAccessKey, getBrowserStorage } from "../lib/auth";
+
 import type {
   BankKey,
   CategoryCatalog,
@@ -39,13 +41,29 @@ export function buildQueryString(params: QueryParams): string {
 async function requestJson<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(path, {
     ...init,
-    headers: { "Content-Type": "application/json", ...init?.headers },
+    headers: {
+      "Content-Type": "application/json",
+      ...buildAuthHeaders(getAccessKey(getBrowserStorage())),
+      ...init?.headers,
+    },
   });
+  if (response.status === 401) throw new AuthRequiredError();
   if (!response.ok) {
     throw new Error(`${response.status} ${response.statusText} on ${path}`);
   }
   return response.json() as Promise<T>;
 }
+
+/** Ask the API to re-read the extracts on the next request. */
+export const reloadData = () => requestJson<{ status: string }>("/api/reload", { method: "POST" });
+
+/** Whether this device may read the data (401 → access key screen). */
+export const useSession = () =>
+  useQuery({
+    queryKey: ["session"],
+    queryFn: () => requestJson<{ authorized: boolean }>("/api/session"),
+    retry: false,
+  });
 
 export const useNetWorth = () =>
   useQuery({
@@ -159,7 +177,12 @@ export const useExtracts = () =>
 async function uploadExtract<T>(path: string, file: File): Promise<T> {
   const formData = new FormData();
   formData.append("file", file);
-  const response = await fetch(path, { method: "POST", body: formData });
+  const response = await fetch(path, {
+    method: "POST",
+    body: formData,
+    headers: buildAuthHeaders(getAccessKey(getBrowserStorage())),
+  });
+  if (response.status === 401) throw new AuthRequiredError();
   const body = await response.json();
   if (!response.ok) {
     // A refused replacement carries the validation report as its detail
