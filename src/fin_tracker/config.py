@@ -31,6 +31,8 @@ PATH_PROCESSED_DATA = PATH_PROJECT_ROOT / "data" / "processed"
 PATH_PRICE_CACHE = PATH_PROCESSED_DATA / "prices"
 PATH_CATEGORY_OVERRIDES = PATH_PROCESSED_DATA / "category_overrides.csv"
 PATH_CATEGORY_RULES = PATH_PROJECT_ROOT / "config" / "categories.yaml"
+# Synthetic extracts of demo mode (fin-tracker-api --demo), regenerated on every start
+PATH_DEMO_DATA = PATH_PROJECT_ROOT / "data" / "demo"
 
 # Personal identifiers (my name) live in the gitignored .env, never in the repo
 load_dotenv(PATH_PROJECT_ROOT / ".env")
@@ -66,6 +68,7 @@ ISIN_TO_ASSET_BUCKET = {
     "IE00B4ND3602": "commodities",  # Physical gold
     "IE000IHURBR0": "fixed_income",  # iBonds Dec 2029
     "IE0000VITHT2": "fixed_income",  # iBonds Dec 2028
+    "IE00DEMO0003": "fixed_income",  # Demo mode bond ETF (fin_tracker.demo)
 }
 DEFAULT_ASSET_BUCKET = "equity"
 
