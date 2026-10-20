@@ -1,5 +1,6 @@
 """FastAPI application exposing my finances to the React frontend (Mac and iPhone)."""
 
+import argparse
 from pathlib import Path
 
 import uvicorn
@@ -87,11 +88,36 @@ def create_app(
     return app
 
 
+def parse_run_arguments(list_arguments: list[str] | None = None) -> argparse.Namespace:
+    """Parse the command line of ``fin-tracker-api``.
+
+    Args:
+        list_arguments: Arguments to parse, defaults to ``sys.argv``.
+
+    Returns:
+        The parsed options (``demo``).
+    """
+    parser = argparse.ArgumentParser(description="Serve the fin_tracker API and app.")
+    parser.add_argument(
+        "--demo",
+        action="store_true",
+        help="run on a synthetic persona (data/demo), offline, real data untouched",
+    )
+    return parser.parse_args(list_arguments)
+
+
 def run() -> None:
     """Serve API and built app (entry point ``fin-tracker-api``).
 
     Listens on ``FIN_TRACKER_HOST`` (loopback by default) and refuses to listen
-    on the network without an access key.
+    on the network without an access key. ``--demo`` serves synthetic data.
     """
+    arguments = parse_run_arguments()
     validate_exposure(API_HOST, API_ACCESS_KEY)
-    uvicorn.run(create_app(), host=API_HOST, port=API_PORT)
+    store = None
+    if arguments.demo:
+        # Imported here: demo mode replaces yfinance for the whole process
+        from fin_tracker.demo import prepare_demo
+
+        store = prepare_demo()
+    uvicorn.run(create_app(store), host=API_HOST, port=API_PORT)

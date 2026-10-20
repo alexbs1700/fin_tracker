@@ -23,6 +23,8 @@ src/fin_tracker/
                      (monthly projection + Monte Carlo percentiles)
   taxes/spain.py     Social Security, IRPF withholding, Madrid IRPF liability (2026 values in config)
   storage/           price_cache.py (yfinance closes/FX cached as CSV)
+  demo/              synthetic persona: extracts.py (real bank file formats), market.py
+                     (deterministic prices replacing yfinance), prepare_demo()
   api/               FastAPI: store.py (cached dataframes), routes/ (one module per
                      resource), models.py (pydantic), serialization.py
 config/categories.yaml  categorization rules (first match wins), user-editable
@@ -35,6 +37,7 @@ tests/               pytest, synthetic data only
 - `uv run fin-tracker`: net worth summary
 - `uv run fin-tracker-api`: API on http://127.0.0.1:8000 (docs at /docs). It also serves the built app (`npm --prefix frontend run build` → `frontend/dist`) at `/`. `POST /api/reload` after dropping new extracts in `data/raw`.
 - New extracts are normally uploaded from the app ("Cargar extractos"): `POST /api/extracts/{bank}/validate` checks, `POST /api/extracts/{bank}` re-validates, backs up the old file to `data/raw/backups/` and replaces it.
+- `uv run fin-tracker-api --demo`: same app on 20 months of synthetic data written to `data/demo` (offline, deterministic, real data untouched). Used for README screenshots (`docs/screenshots`).
 - `uv run pytest`
 - `uv run ruff format . && uv run ruff check --fix .`
 - After adding modules: `uv sync --reinstall-package fin-tracker`

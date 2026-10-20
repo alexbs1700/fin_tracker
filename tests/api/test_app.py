@@ -42,6 +42,7 @@ def test_to_timestamp():
 
 def test_run_serves_on_localhost(monkeypatch):
     dict_run_arguments = {}
+    monkeypatch.setattr("sys.argv", ["fin-tracker-api"])
     monkeypatch.setattr(
         app_module.uvicorn,
         "run",
@@ -49,3 +50,21 @@ def test_run_serves_on_localhost(monkeypatch):
     )
     app_module.run()
     assert dict_run_arguments == {"host": API_HOST, "port": API_PORT}
+
+
+def test_run_with_demo_serves_the_demo_store(monkeypatch, store):
+    dict_run_arguments = {}
+    monkeypatch.setattr("sys.argv", ["fin-tracker-api", "--demo"])
+    monkeypatch.setattr("fin_tracker.demo.prepare_demo", lambda: store)
+    monkeypatch.setattr(
+        app_module.uvicorn,
+        "run",
+        lambda app, host, port: dict_run_arguments.update(app=app),
+    )
+    app_module.run()
+    assert dict_run_arguments["app"].state.store is store
+
+
+def test_parse_run_arguments():
+    assert app_module.parse_run_arguments([]).demo is False
+    assert app_module.parse_run_arguments(["--demo"]).demo is True
